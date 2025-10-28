@@ -1,17 +1,18 @@
-import supabase from '../lib/supabaseClient';
+﻿import supabase from '../lib/supabaseClient';
 import { hashSHA256 } from '../utils/hash';
+import { sanitizeInput } from '../utils/sanitize';
 
 const ROLE_OPTIONS = ['admin', 'organizer', 'participant'];
 const STATUS_OPTIONS = ['ativo', 'inativo'];
 
-export async function loginUser({ email, password }) {
-  const normalizedEmail = (email ?? '').trim().toLowerCase();
+export async function loginUser({ login, password }) {
+  const normalizedLogin = sanitizeInput(login).toLowerCase();
   const passwordHash = await hashSHA256(password ?? '');
 
   const { data: user, error } = await supabase
     .from('users')
-    .select('id, name, email, phone, role, status, password_hash')
-    .eq('email', normalizedEmail)
+    .select('id, login, name, phone, role, status, password_hash, password_change_required')
+    .eq('login', normalizedLogin)
     .maybeSingle();
 
   if (error) {
@@ -29,7 +30,7 @@ export async function loginUser({ email, password }) {
 export async function fetchUsers() {
   const { data, error } = await supabase
     .from('users')
-    .select('id, name, email, phone, role, status, created_at')
+    .select('id, login, name, phone, role, status, password_change_required, created_at')
     .order('name', { ascending: true });
 
   if (error) {
@@ -48,18 +49,84 @@ export async function createUser(userData) {
     throw new Error('Status invalido.');
   }
 
+  const login = sanitizeInput(userData.login).toLowerCase();
+  const name = sanitizeInput(userData.name);
+  const phone = sanitizeInput(userData.phone);
+
+  if (!login) {
+    throw new Error('Login obrigatorio.');
+  }
+
   const passwordHash = await hashSHA256(userData.password);
 
   const payload = {
-    name: userData.name,
-    email: (userData.email ?? '').trim().toLowerCase(),
-    phone: userData.phone,
+    login,
+    name,
+    phone,
     role: userData.role,
     status: userData.status,
     password_hash: passwordHash,
+    password_change_required: Boolean(userData.passwordChangeRequired),
   };
 
-  const { error } = await supabase.from('users').insert(payload);
+  const { data, error } = await supabase.from('users').insert([payload]).select('id').single();
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function updateUser(userId, updates) {
+  const payload = {};
+
+  if (updates.login !== undefined) {
+    payload.login = sanitizeInput(updates.login).toLowerCase();
+  }
+  if (updates.name !== undefined) {
+    payload.name = sanitizeInput(updates.name);
+  }
+  if (updates.phone !== undefined) {
+    payload.phone = sanitizeInput(updates.phone);
+  }
+  if (updates.role !== undefined) {
+    if (!ROLE_OPTIONS.includes(updates.role)) {
+      throw new Error('Papel invalido.');
+    }
+    payload.role = updates.role;
+  }
+  if (updates.status !== undefined) {
+    if (!STATUS_OPTIONS.includes(updates.status)) {
+      throw new Error('Status invalido.');
+    }
+    payload.status = updates.status;
+  }
+  if (updates.passwordChangeRequired !== undefined) {
+    payload.password_change_required = Boolean(updates.passwordChangeRequired);
+  }
+
+  if (Object.keys(payload).length === 0) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('users')
+    .update(payload)
+    .eq('id', userId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function updateUserPassword(userId, newPassword) {
+  const passwordHash = await hashSHA256(newPassword);
+  const { error } = await supabase
+    .from('users')
+    .update({
+      password_hash: passwordHash,
+      password_change_required: false,
+    })
+    .eq('id', userId);
 
   if (error) {
     throw error;
@@ -81,5 +148,8 @@ export default {
   loginUser,
   fetchUsers,
   createUser,
+  updateUser,
+  updateUserPassword,
   deleteUser,
 };
+

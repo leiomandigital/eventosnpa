@@ -7,7 +7,7 @@ const roleLabels = {
   participant: 'Participante',
 };
 
-const Header = ({ userRole, onLogout, userName, userEmail }) => (
+const Header = ({ userRole, onLogout, userName, userLogin }) => (
   <header className="bg-white border-b border-gray-200 px-6 py-4">
     <div className="flex items-center justify-between">
       <div className="flex items-center space-x-3">
@@ -23,7 +23,7 @@ const Header = ({ userRole, onLogout, userName, userEmail }) => (
       <div className="flex items-center space-x-4">
         <div className="text-right hidden sm:block">
           <p className="text-sm font-medium text-gray-900">{userName || 'Usuario autenticado'}</p>
-          <p className="text-xs text-gray-500">{userEmail || ''}</p>
+          <p className="text-xs text-gray-500">{userLogin || ''}</p>
         </div>
         <button 
           onClick={onLogout}

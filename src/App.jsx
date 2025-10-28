@@ -6,11 +6,15 @@ import DashboardView from './components/dashboard/DashboardView';
 import EventsListView from './components/events/EventsListView';
 import CreateEventView from './components/events/CreateEventView';
 import RespondEventView from './components/events/RespondEventView';
+import EventResponsesView from './components/events/EventResponsesView';
 import UsersView from './components/admin/UsersView';
 import {
   fetchEvents,
   createEventWithQuestions,
+  updateEventWithQuestions,
   deleteEvent,
+  fetchEventResponses,
+  deleteEventResponses,
 } from './services/eventsService';
 import {
   loginUser,
@@ -19,7 +23,8 @@ import {
   deleteUser,
 } from './services/usersService';
 
-const VIEWS_REQUIRING_EVENTS = new Set(['dashboard', 'events']);
+const VIEWS_REQUIRING_EVENTS = new Set(['dashboard', 'events', 'preview-event', 'event-responses']);
+const VIEWS_KEEPING_SELECTED_EVENT = new Set(['respond-event', 'preview-event', 'event-responses']);
 
 const EventManagementSystem = () => {
   const [currentView, setCurrentView] = useState('login');
@@ -30,6 +35,9 @@ const EventManagementSystem = () => {
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [editingEvent, setEditingEvent] = useState(null);
+  const [eventResponses, setEventResponses] = useState([]);
+  const [eventResponsesLoading, setEventResponsesLoading] = useState(false);
 
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -37,8 +45,12 @@ const EventManagementSystem = () => {
   const userRole = currentUser?.role ?? 'participant';
 
   const handleChangeView = (view) => {
-    if (view !== 'respond-event') {
+    if (!VIEWS_KEEPING_SELECTED_EVENT.has(view)) {
       setSelectedEvent(null);
+      setEventResponses([]);
+    }
+    if (view !== 'create-event') {
+      setEditingEvent(null);
     }
     setCurrentView(view);
   };
@@ -85,11 +97,11 @@ const EventManagementSystem = () => {
     }
   }, [currentUser, currentView, loadUsers]);
 
-  const handleLogin = async ({ email, password }) => {
+  const handleLogin = async ({ login, password }) => {
     setAuthError('');
     setAuthLoading(true);
     try {
-      const user = await loginUser({ email, password });
+      const user = await loginUser({ login, password });
       setCurrentUser(user);
       setCurrentView('dashboard');
       await loadEvents();
@@ -107,9 +119,17 @@ const EventManagementSystem = () => {
     setUsers([]);
     setCurrentUser(null);
     setCurrentView('login');
+    setEditingEvent(null);
+    setEventResponses([]);
   };
 
-  const handleSubmitEvent = async (eventData, questions, statusOverride) => {
+  const handleCreateEventClick = () => {
+    setEditingEvent(null);
+    setSelectedEvent(null);
+    setCurrentView('create-event');
+  };
+
+  const handleSaveEvent = async (eventData, questions, eventId) => {
     if (!currentUser) {
       window.alert('E necessario estar autenticado para criar eventos.');
       return;
@@ -117,26 +137,32 @@ const EventManagementSystem = () => {
 
     const payload = {
       ...eventData,
-      status: statusOverride ?? eventData.status ?? 'aguardando',
+      status: eventData.status ?? 'aguardando',
     };
 
     try {
-      await createEventWithQuestions(payload, questions, currentUser.id);
+      if (eventId) {
+        await updateEventWithQuestions(eventId, payload, questions);
+        window.alert('Evento atualizado com sucesso.');
+      } else {
+        await createEventWithQuestions(payload, questions, currentUser.id);
+        window.alert('Evento salvo com sucesso.');
+      }
       await loadEvents();
       setCurrentView('events');
-      window.alert('Evento salvo com sucesso.');
+      setEditingEvent(null);
     } catch (error) {
       const message = error?.message ?? 'Nao foi possivel salvar o evento.';
       window.alert(message);
     }
   };
 
-  const handleSaveDraft = async (eventData, questions) => {
-    await handleSubmitEvent(eventData, questions, 'aguardando');
-  };
-
-  const handlePublish = async (eventData, questions) => {
-    await handleSubmitEvent(eventData, questions, 'ativo');
+  const handlePreviewEvent = (eventToPreview) => {
+    if (!eventToPreview) {
+      return;
+    }
+    setSelectedEvent(eventToPreview);
+    setCurrentView('preview-event');
   };
 
   const handleDeleteEvent = async (eventId) => {
@@ -151,6 +177,47 @@ const EventManagementSystem = () => {
     } catch (error) {
       const message = error?.message ?? 'Nao foi possivel remover o evento.';
       window.alert(message);
+    }
+  };
+
+  const loadEventResponses = useCallback(async (eventId) => {
+    setEventResponsesLoading(true);
+    try {
+      const data = await fetchEventResponses(eventId);
+      setEventResponses(data);
+    } catch (error) {
+      const message = error?.message ?? 'Nao foi possivel carregar as respostas do evento.';
+      window.alert(message);
+      setEventResponses([]);
+    } finally {
+      setEventResponsesLoading(false);
+    }
+  }, []);
+
+  const handleViewEventResponses = async (eventToView) => {
+    if (!eventToView?.id) {
+      return;
+    }
+    setSelectedEvent(eventToView);
+    setCurrentView('event-responses');
+    await loadEventResponses(eventToView.id);
+  };
+
+  const handleDeleteResponses = async (responseIds) => {
+    if (!selectedEvent?.id || !Array.isArray(responseIds) || responseIds.length === 0) {
+      return;
+    }
+    setEventResponsesLoading(true);
+    try {
+      await deleteEventResponses(responseIds);
+      await loadEventResponses(selectedEvent.id);
+      await loadEvents();
+      window.alert('Respostas excluidas com sucesso.');
+    } catch (error) {
+      const message = error?.message ?? 'Nao foi possivel excluir as respostas selecionadas.';
+      window.alert(message);
+    } finally {
+      setEventResponsesLoading(false);
     }
   };
 
@@ -179,7 +246,9 @@ const EventManagementSystem = () => {
   };
 
   const handleEditEvent = (eventToEdit) => {
-    window.alert(`Funcionalidade de edicao para "${eventToEdit.title}" ainda sera implementada.`);
+    setEditingEvent(eventToEdit);
+    setSelectedEvent(null);
+    setCurrentView('create-event');
   };
 
   const handleCreateUser = async (userData) => {
@@ -250,19 +319,30 @@ const EventManagementSystem = () => {
               userRole={userRole}
               events={visibleEvents}
               loading={eventsLoading}
-              onCreateEvent={() => handleChangeView('create-event')}
+              onCreateEvent={handleCreateEventClick}
               onRespond={(event) => handleRespondEvent(event.id)}
+              onPreview={handlePreviewEvent}
+              onViewResponses={handleViewEventResponses}
               onShare={handleShareEvent}
               onEdit={handleEditEvent}
               onDelete={(eventId) => handleDeleteEvent(eventId)}
             />
           )}
 
+          {currentView === 'preview-event' && selectedEvent && (
+            <RespondEventView 
+              event={selectedEvent}
+              readOnly
+              onShare={handleShareEvent}
+            />
+          )}
+
           {currentView === 'create-event' && (
             <CreateEventView 
+              editingEvent={editingEvent}
+              availableEvents={events}
               onCancel={() => handleChangeView('events')}
-              onSaveDraft={handleSaveDraft}
-              onPublish={handlePublish}
+              onSave={handleSaveEvent}
             />
           )}
 
@@ -270,6 +350,15 @@ const EventManagementSystem = () => {
             <RespondEventView 
               event={selectedEvent}
               onBack={() => handleChangeView('events')}
+            />
+          )}
+
+          {currentView === 'event-responses' && selectedEvent && (
+            <EventResponsesView 
+              event={selectedEvent}
+              responses={eventResponses}
+              loading={eventResponsesLoading}
+              onDeleteResponses={handleDeleteResponses}
             />
           )}
 
@@ -288,3 +377,6 @@ const EventManagementSystem = () => {
 };
 
 export default EventManagementSystem;
+
+
+

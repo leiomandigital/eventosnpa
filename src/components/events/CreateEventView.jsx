@@ -1,21 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
-
-const initialFormState = {
-  title: '',
-  additionalInfo: '',
-  eventDate: '',
-  startDateTime: '',
-  endDateTime: '',
-  status: 'aguardando',
-};
-
-const initialQuestionState = {
-  text: '',
-  type: 'short_text',
-  required: false,
-  options: [''],
-};
 
 const questionTypeOptions = [
   { value: 'short_text', label: 'Texto curto' },
@@ -25,16 +9,117 @@ const questionTypeOptions = [
   { value: 'single_choice', label: 'Escolha unica' },
 ];
 
+const initialQuestionState = {
+  text: '',
+  type: 'short_text',
+  required: false,
+  options: [''],
+};
+
 const isChoiceType = (type) => type === 'multiple_choice' || type === 'single_choice';
 
-const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
-  const [formData, setFormData] = useState(initialFormState);
+const toDateInputValue = (value) => {
+  if (!value) {
+    return '';
+  }
+  const date = new Date(value);
+  const tzOffset = date.getTimezoneOffset();
+  date.setMinutes(date.getMinutes() - tzOffset);
+  return date.toISOString().slice(0, 10);
+};
+
+const toDateTimeLocalValue = (value) => {
+  if (!value) {
+    return '';
+  }
+  const date = new Date(value);
+  const tzOffset = date.getTimezoneOffset();
+  date.setMinutes(date.getMinutes() - tzOffset);
+  return date.toISOString().slice(0, 16);
+};
+
+const createDefaultFormState = () => {
+  const now = new Date();
+  const end = new Date(now.getTime() + 60 * 60 * 1000);
+  const tzOffsetNow = now.getTimezoneOffset();
+  const tzOffsetEnd = end.getTimezoneOffset();
+  now.setMinutes(now.getMinutes() - tzOffsetNow);
+  end.setMinutes(end.getMinutes() - tzOffsetEnd);
+  return {
+    title: '',
+    additionalInfo: '',
+    eventDate: now.toISOString().slice(0, 10),
+    startDateTime: now.toISOString().slice(0, 16),
+    endDateTime: end.toISOString().slice(0, 16),
+    status: 'aguardando',
+  };
+};
+
+const mapQuestionsFromEvent = (questions = []) =>
+  questions
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .map(question => ({
+      id: question.id,
+      text: question.text,
+      type: question.type,
+      required: Boolean(question.required),
+      options: Array.isArray(question.options) ? question.options : [],
+    }));
+
+const CreateEventView = ({
+  editingEvent = null,
+  availableEvents = [],
+  onCancel,
+  onSave,
+}) => {
+  const isEditing = Boolean(editingEvent);
+  const [formData, setFormData] = useState(createDefaultFormState);
   const [questions, setQuestions] = useState([]);
   const [questionForm, setQuestionForm] = useState(initialQuestionState);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [copySourceId, setCopySourceId] = useState('');
+
+  useEffect(() => {
+    if (isEditing) {
+      setFormData({
+        title: editingEvent.title ?? '',
+        additionalInfo: editingEvent.additionalInfo ?? '',
+        eventDate: toDateInputValue(editingEvent.eventDate),
+        startDateTime: toDateTimeLocalValue(editingEvent.startDateTime),
+        endDateTime: toDateTimeLocalValue(editingEvent.endDateTime),
+        status: editingEvent.status ?? 'aguardando',
+      });
+      setQuestions(mapQuestionsFromEvent(editingEvent.questions));
+    } else {
+      setFormData(createDefaultFormState());
+      setQuestions([]);
+    }
+    setCopySourceId('');
+    setQuestionForm(initialQuestionState);
+    setErrors({});
+    setSubmitting(false);
+  }, [isEditing, editingEvent]);
+
+  useEffect(() => {
+    if (!copySourceId) {
+      return;
+    }
+    const sourceEvent = availableEvents.find(event => String(event.id) === String(copySourceId));
+    if (sourceEvent?.questions?.length) {
+      setQuestions(mapQuestionsFromEvent(sourceEvent.questions));
+    }
+  }, [copySourceId, availableEvents]);
 
   const hasQuestions = useMemo(() => questions.length > 0, [questions.length]);
+  const disableActiveStatus = useMemo(() => !hasQuestions, [hasQuestions]);
+  const selectableEvents = useMemo(() => {
+    if (!Array.isArray(availableEvents)) {
+      return [];
+    }
+    return availableEvents
+      .filter(event => String(event.id) !== String(editingEvent?.id) && (event.questions ?? []).length > 0);
+  }, [availableEvents, editingEvent]);
 
   const handleInputChange = (field) => (event) => {
     setFormData(prev => ({ ...prev, [field]: event.target.value }));
@@ -75,21 +160,10 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
   const validateEvent = () => {
     const newErrors = {};
 
-    if (!formData.title.trim()) {
-      newErrors.title = 'Informe o titulo do evento.';
-    }
-
-    if (!formData.eventDate) {
-      newErrors.eventDate = 'Informe a data do evento.';
-    }
-
-    if (!formData.startDateTime) {
-      newErrors.startDateTime = 'Informe a data e hora de inicio.';
-    }
-
-    if (!formData.endDateTime) {
-      newErrors.endDateTime = 'Informe a data e hora de termino.';
-    }
+    if (!formData.title.trim()) newErrors.title = 'Informe o titulo do evento.';
+    if (!formData.eventDate) newErrors.eventDate = 'Informe a data do evento.';
+    if (!formData.startDateTime) newErrors.startDateTime = 'Informe a data e hora de inicio.';
+    if (!formData.endDateTime) newErrors.endDateTime = 'Informe a data e hora de termino.';
 
     if (formData.startDateTime && formData.endDateTime) {
       const start = new Date(formData.startDateTime);
@@ -113,13 +187,11 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
       const sanitizedOptions = (questionForm.options ?? [])
         .map(option => option.trim())
         .filter(Boolean);
-
       if (sanitizedOptions.length < 2) {
         window.alert('Adicione pelo menos duas opcoes para perguntas de multipla escolha ou escolha unica.');
         return false;
       }
     }
-
     return true;
   };
 
@@ -127,16 +199,7 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
     if (!validateQuestionForm()) {
       return;
     }
-
-    const sanitizedQuestion = {
-      ...questionForm,
-      id: Date.now(),
-      options: isChoiceType(questionForm.type)
-        ? questionForm.options.map(option => option.trim()).filter(Boolean)
-        : [],
-    };
-
-    setQuestions(prev => [...prev, sanitizedQuestion]);
+    setQuestions(prev => [...prev, { ...questionForm }]);
     resetQuestionForm();
   };
 
@@ -148,55 +211,42 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
     setQuestions(prev => {
       const updated = [...prev];
       const newIndex = index + direction;
-
       if (newIndex < 0 || newIndex >= updated.length) {
         return prev;
       }
-
       const [moved] = updated.splice(index, 1);
       updated.splice(newIndex, 0, moved);
       return updated;
     });
   };
 
-  const disableActiveStatus = useMemo(() => !hasQuestions, [hasQuestions]);
-
-  const handleSaveDraft = async () => {
-    if (!validateEvent()) {
+  const submitEvent = async () => {
+    if (!validateEvent() || typeof onSave !== 'function') {
       return;
     }
-
     setSubmitting(true);
     try {
-      await onSaveDraft?.(formData, questions);
+      await onSave(formData, questions, editingEvent?.id);
+      if (!editingEvent) {
+        setFormData(createDefaultFormState());
+        setQuestions([]);
+        resetQuestionForm();
+        setCopySourceId('');
+      }
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handlePublish = async () => {
-    if (!validateEvent()) {
-      return;
-    }
-
-    if (!hasQuestions) {
-      window.alert('Adicione ao menos uma pergunta antes de publicar o evento.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      await onPublish?.({ ...formData, status: 'ativo' }, questions);
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const handleSave = () => submitEvent();
 
   return (
     <div className="p-6">
-      <h2 className="text-2xl font-bold text-sky-600 mb-6">Criar Novo Evento</h2>
+      <h2 className="text-2xl font-bold text-sky-600 mb-6">
+        {isEditing ? 'Editar Evento' : 'Criar Novo Evento'}
+      </h2>
       
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 space-y-8">
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 space-y-8">
         <section className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Titulo do Evento</label>
@@ -206,7 +256,7 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
               onChange={handleInputChange('title')}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
               placeholder="Ex: Conferencia Tech 2025"
-              disabled={submitting}
+              required
             />
             {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
           </div>
@@ -219,7 +269,6 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
               onChange={handleInputChange('additionalInfo')}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
               placeholder="Descreva o evento..."
-              disabled={submitting}
             />
           </div>
           
@@ -231,7 +280,6 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
                 value={formData.eventDate}
                 onChange={handleInputChange('eventDate')}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-                disabled={submitting}
               />
               {errors.eventDate && <p className="text-xs text-red-500 mt-1">{errors.eventDate}</p>}
             </div>
@@ -242,7 +290,6 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
                 value={formData.status}
                 onChange={handleInputChange('status')}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-                disabled={submitting}
               >
                 <option value="aguardando">Aguardando</option>
                 <option value="ativo" disabled={disableActiveStatus}>Ativo</option>
@@ -264,7 +311,6 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
                 value={formData.startDateTime}
                 onChange={handleInputChange('startDateTime')}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-                disabled={submitting}
               />
               {errors.startDateTime && <p className="text-xs text-red-500 mt-1">{errors.startDateTime}</p>}
             </div>
@@ -276,7 +322,6 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
                 value={formData.endDateTime}
                 onChange={handleInputChange('endDateTime')}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
-                disabled={submitting}
               />
               {errors.endDateTime && <p className="text-xs text-red-500 mt-1">{errors.endDateTime}</p>}
             </div>
@@ -284,63 +329,25 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
         </section>
 
         <section className="border-t border-gray-200 pt-6 space-y-6">
-          <div>
-            <h3 className="text-lg font-bold text-sky-600">Perguntas do formulario</h3>
-            <p className="text-sm text-gray-600 mt-1">Defina as perguntas que os participantes deverao responder.</p>
-          </div>
-          
-          <div className="space-y-3">
-            {questions.map((question, index) => (
-              <div key={question.id} className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-gray-900">
-                      {index + 1}. {question.text}
-                      {question.required && <span className="ml-1 text-red-500">*</span>}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Tipo: {questionTypeOptions.find(option => option.value === question.type)?.label ?? question.type}
-                    </p>
-                    {isChoiceType(question.type) && (
-                      <ul className="text-xs text-gray-500 list-disc list-inside">
-                        {question.options.map((option, optionIndex) => (
-                          <li key={optionIndex}>{option}</li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleMoveQuestion(index, -1)}
-                      className="p-2 text-gray-600 hover:bg-white rounded transition"
-                      title="Mover para cima"
-                      type="button"
-                    >
-                      <ArrowUp className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleMoveQuestion(index, 1)}
-                      className="p-2 text-gray-600 hover:bg-white rounded transition"
-                      title="Mover para baixo"
-                      type="button"
-                    >
-                      <ArrowDown className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleRemoveQuestion(index)}
-                      className="p-2 text-red-600 hover:bg-white rounded transition"
-                      title="Remover pergunta"
-                      type="button"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
           <div className="p-4 border border-dashed border-gray-300 rounded-lg space-y-4">
+            {selectableEvents.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Copiar perguntas de outro evento</label>
+                <select
+                  value={copySourceId}
+                  onChange={(event) => setCopySourceId(event.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                >
+                  <option value="">Selecione um evento</option>
+                  {selectableEvents.map(eventOption => (
+                    <option key={eventOption.id} value={eventOption.id}>
+                      {eventOption.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Texto da pergunta</label>
               <input
@@ -422,6 +429,59 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
               </button>
             </div>
           </div>
+
+          {questions.length > 0 && (
+            <div className="space-y-3">
+              {questions.map((question, index) => (
+                <div key={index} className="p-4 bg-gray-50 rounded-lg">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-gray-900">
+                        {index + 1}. {question.text}
+                        {question.required && <span className="ml-1 text-red-500">*</span>}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        Tipo: {questionTypeOptions.find(option => option.value === question.type)?.label ?? question.type}
+                      </p>
+                      {isChoiceType(question.type) && (
+                        <ul className="text-xs text-gray-500 list-disc list-inside">
+                          {(question.options ?? []).map((option, optionIndex) => (
+                            <li key={optionIndex}>{option}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleMoveQuestion(index, -1)}
+                        className="p-2 text-gray-600 hover:bg-white rounded transition"
+                        title="Mover para cima"
+                        type="button"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleMoveQuestion(index, 1)}
+                        className="p-2 text-gray-600 hover:bg-white rounded transition"
+                        title="Mover para baixo"
+                        type="button"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleRemoveQuestion(index)}
+                        className="p-2 text-red-600 hover:bg-white rounded transition"
+                        title="Remover pergunta"
+                        type="button"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
 
         <div className="flex items-center justify-end space-x-3 pt-6 border-t border-gray-200">
@@ -434,20 +494,12 @@ const CreateEventView = ({ onCancel, onSaveDraft, onPublish }) => {
             Cancelar
           </button>
           <button 
-            onClick={handleSaveDraft}
-            className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition disabled:opacity-60 disabled:cursor-not-allowed"
-            type="button"
-            disabled={submitting}
-          >
-            {submitting ? 'Salvando...' : 'Salvar como rascunho'}
-          </button>
-          <button 
-            onClick={handlePublish}
+            onClick={handleSave}
             className="px-6 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition disabled:opacity-60 disabled:cursor-not-allowed"
             type="button"
-            disabled={!hasQuestions || submitting}
+            disabled={submitting || (formData.status === 'ativo' && !hasQuestions)}
           >
-            {submitting ? 'Publicando...' : 'Publicar evento'}
+            {submitting ? 'Salvando...' : 'Salvar'}
           </button>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckSquare, Edit2, Plus, Share2, Trash2 } from 'lucide-react';
+import { CheckSquare, ClipboardList, Edit2, Eye, Plus, Share2, Trash2 } from 'lucide-react';
 
 const statusLabels = {
   aguardando: { label: 'Aguardando', className: 'bg-gray-100 text-gray-700' },
@@ -37,6 +37,8 @@ const EventsListView = ({
   loading = false,
   onCreateEvent,
   onRespond,
+  onPreview,
+  onViewResponses,
   onShare,
   onEdit,
   onDelete,
@@ -56,7 +58,7 @@ const EventsListView = ({
       )}
     </div>
     
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden overflow-x-auto">
+    <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden overflow-x-auto">
       <table className="w-full min-w-max">
         <thead className="bg-gray-50">
           <tr>
@@ -87,6 +89,10 @@ const EventsListView = ({
 
           {!loading && events.map(event => {
             const statusInfo = statusLabels[event.status] ?? statusLabels.aguardando;
+            const responsesCount = Number(event.responsesCount ?? 0);
+            const canManage = userRole === 'admin' || userRole === 'organizer';
+            const deleteDisabled = responsesCount > 0;
+            const editDisabled = responsesCount > 0;
             return (
               <tr key={event.id} className="hover:bg-gray-50">
                 <td className="px-4 sm:px-6 py-4">
@@ -120,29 +126,58 @@ const EventsListView = ({
                       <CheckSquare className="w-4 h-4" />
                     </button>
 
-                    {(userRole === 'admin' || userRole === 'organizer') && (
+                    {canManage && (
                       <>
+                        {responsesCount > 0 && (
+                          <button
+                            onClick={() => onViewResponses?.(event)}
+                            className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition"
+                            title="Visualizar respostas"
+                            type="button"
+                          >
+                            <ClipboardList className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => onPreview?.(event)}
+                          className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition"
+                          title="Pre-visualizar formulario"
+                          type="button"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => onShare(event)}
-                          className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition"
+                          className={`p-2 rounded-lg transition ${event.status !== 'ativo' ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-50'}`}
                           title="Compartilhar formulario"
                           type="button"
+                          disabled={event.status !== 'ativo'}
                         >
                           <Share2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => onEdit?.(event)}
-                          className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition"
+                          onClick={() => {
+                            if (!editDisabled) {
+                              onEdit?.(event);
+                            }
+                          }}
+                          className={`p-2 rounded-lg transition ${editDisabled ? 'text-gray-300 cursor-not-allowed' : 'text-gray-600 hover:bg-gray-50'}`}
                           title="Editar evento"
                           type="button"
+                          disabled={editDisabled}
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => onDelete?.(event.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                          onClick={() => {
+                            if (!deleteDisabled) {
+                              onDelete?.(event.id);
+                            }
+                          }}
+                          className={`p-2 rounded-lg transition ${deleteDisabled ? 'text-red-400 cursor-not-allowed' : 'text-red-600 hover:bg-red-50'}`}
                           title="Excluir"
                           type="button"
+                          disabled={deleteDisabled}
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>

@@ -36,10 +36,6 @@ const Sidebar = ({ currentView, userRole, onChangeView }) => (
         </button>
       )}
       
-      <button className="w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-gray-700 hover:bg-gray-50 transition">
-        <Settings className="w-5 h-5" />
-        <span className="font-medium">Configuracoes</span>
-      </button>
     </nav>
   </aside>
 );

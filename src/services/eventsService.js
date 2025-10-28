@@ -1,7 +1,10 @@
 import supabase from '../lib/supabaseClient';
+import { sanitizeInput, sanitizeStringArray } from '../utils/sanitize';
 
 const EVENT_STATUS = ['aguardando', 'ativo', 'encerrado'];
 const QUESTION_TYPES = ['short_text', 'long_text', 'time', 'multiple_choice', 'single_choice'];
+
+const isChoiceType = (type) => type === 'multiple_choice' || type === 'single_choice';
 
 const normaliseEvent = (record) => ({
   id: record.id,
@@ -23,6 +26,9 @@ const normaliseEvent = (record) => ({
       options: Array.isArray(question.options) ? question.options : [],
       sortOrder: question.sort_order ?? 0,
     })),
+  responsesCount: Array.isArray(record.event_responses) && record.event_responses[0]?.count
+    ? Number(record.event_responses[0].count)
+    : 0,
 });
 
 export async function fetchEvents() {
@@ -45,7 +51,8 @@ export async function fetchEvents() {
         required,
         options,
         sort_order
-      )
+      ),
+      event_responses ( count )
     `)
     .order('start_datetime', { ascending: true });
 
@@ -76,7 +83,8 @@ export async function fetchEventById(eventId) {
         required,
         options,
         sort_order
-      )
+      ),
+      event_responses ( count )
     `)
     .eq('id', eventId)
     .single();
@@ -88,26 +96,41 @@ export async function fetchEventById(eventId) {
   return normaliseEvent(data);
 }
 
-export async function createEventWithQuestions(eventData, questions, currentUserId) {
+const buildEventPayload = (eventData, currentUserId) => ({
+  title: sanitizeInput(eventData.title),
+  additional_info: sanitizeInput(eventData.additionalInfo) || null,
+  event_date: eventData.eventDate,
+  start_datetime: eventData.startDateTime,
+  end_datetime: eventData.endDateTime,
+  status: eventData.status,
+  created_by: currentUserId ?? null,
+});
+
+const buildQuestionPayload = (eventId, questions) =>
+  questions.map((question, index) => ({
+    event_id: eventId,
+    text: sanitizeInput(question.text),
+    type: question.type,
+    required: Boolean(question.required),
+    options: isChoiceType(question.type) ? sanitizeStringArray(question.options ?? []) : [],
+    sort_order: index,
+  }));
+
+const validateEventInput = (eventData, questions) => {
   if (!EVENT_STATUS.includes(eventData.status)) {
     throw new Error('Status invalido para o evento.');
   }
-
   questions.forEach(question => {
     if (!QUESTION_TYPES.includes(question.type)) {
       throw new Error(`Tipo de pergunta invalido: ${question.type}`);
     }
   });
+};
 
-  const payload = {
-    title: eventData.title,
-    additional_info: eventData.additionalInfo || null,
-    event_date: eventData.eventDate,
-    start_datetime: eventData.startDateTime,
-    end_datetime: eventData.endDateTime,
-    status: eventData.status,
-    created_by: currentUserId ?? null,
-  };
+export async function createEventWithQuestions(eventData, questions, currentUserId) {
+  validateEventInput(eventData, questions);
+
+  const payload = buildEventPayload(eventData, currentUserId);
 
   const { data: createdEvent, error: createError } = await supabase
     .from('events')
@@ -123,14 +146,7 @@ export async function createEventWithQuestions(eventData, questions, currentUser
     return createdEvent.id;
   }
 
-  const questionsPayload = questions.map((question, index) => ({
-    event_id: createdEvent.id,
-    text: question.text,
-    type: question.type,
-    required: Boolean(question.required),
-    options: isChoiceType(question.type) ? question.options ?? [] : [],
-    sort_order: index,
-  }));
+  const questionsPayload = buildQuestionPayload(createdEvent.id, questions);
 
   const { error: questionsError } = await supabase
     .from('event_questions')
@@ -144,7 +160,106 @@ export async function createEventWithQuestions(eventData, questions, currentUser
   return createdEvent.id;
 }
 
+export async function updateEventWithQuestions(eventId, eventData, questions) {
+  validateEventInput(eventData, questions);
+
+  const payload = {
+    title: sanitizeInput(eventData.title),
+    additional_info: sanitizeInput(eventData.additionalInfo) || null,
+    event_date: eventData.eventDate,
+    start_datetime: eventData.startDateTime,
+    end_datetime: eventData.endDateTime,
+    status: eventData.status,
+  };
+
+  const { error: updateError } = await supabase
+    .from('events')
+    .update(payload)
+    .eq('id', eventId);
+
+  if (updateError) {
+    throw updateError;
+  }
+
+  const { error: deleteError } = await supabase
+    .from('event_questions')
+    .delete()
+    .eq('event_id', eventId);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  if (questions.length === 0) {
+    return eventId;
+  }
+
+  const questionsPayload = buildQuestionPayload(eventId, questions);
+
+  const { error: insertError } = await supabase
+    .from('event_questions')
+    .insert(questionsPayload);
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  return eventId;
+}
+
+export async function submitEventResponse(eventId, answers = {}, userId = null) {
+  const responsePayload = {
+    event_id: eventId,
+    submitted_by: userId ?? null,
+  };
+
+  const { data: createdResponse, error: responseError } = await supabase
+    .from('event_responses')
+    .insert(responsePayload)
+    .select('id')
+    .single();
+
+  if (responseError) {
+    throw responseError;
+  }
+
+  const entries = Object.entries(answers ?? {});
+  if (entries.length === 0) {
+    return createdResponse.id;
+  }
+
+  const answersPayload = entries.map(([questionId, value]) => ({
+    response_id: createdResponse.id,
+    question_id: questionId,
+    value: Array.isArray(value) ? value.join(', ') : String(value ?? ''),
+  }));
+
+  const { error: answersError } = await supabase
+    .from('event_answers')
+    .insert(answersPayload);
+
+  if (answersError) {
+    await supabase.from('event_responses').delete().eq('id', createdResponse.id);
+    throw answersError;
+  }
+
+  return createdResponse.id;
+}
+
 export async function deleteEvent(eventId) {
+  const { count, error: countError } = await supabase
+    .from('event_responses')
+    .select('*', { count: 'exact', head: true })
+    .eq('event_id', eventId);
+
+  if (countError) {
+    throw countError;
+  }
+
+  if ((count ?? 0) > 0) {
+    throw new Error('Nao e possivel excluir eventos que possuem respostas registradas.');
+  }
+
   const { error } = await supabase
     .from('events')
     .delete()
@@ -155,11 +270,69 @@ export async function deleteEvent(eventId) {
   }
 }
 
-const isChoiceType = (type) => type === 'multiple_choice' || type === 'single_choice';
+export async function fetchEventResponses(eventId) {
+  const { data, error } = await supabase
+    .from('event_responses')
+    .select(`
+      id,
+      event_id,
+      submitted_at,
+      submitted_by,
+      users:submitted_by (
+        name,
+        login
+      ),
+      event_answers (
+        id,
+        question_id,
+        value,
+        created_at
+      )
+    `)
+    .eq('event_id', eventId)
+    .order('submitted_at', { ascending: false });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map(response => ({
+    id: response.id,
+    eventId: response.event_id,
+    submittedAt: response.submitted_at,
+    submittedBy: response.submitted_by,
+    user: response.users ? { ...response.users } : null,
+    answers: (response.event_answers ?? []).map(answer => ({
+      id: answer.id,
+      questionId: answer.question_id,
+      value: answer.value ?? '',
+      createdAt: answer.created_at,
+    })),
+  }));
+}
+
+export async function deleteEventResponses(responseIds = []) {
+  if (!Array.isArray(responseIds) || responseIds.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('event_responses')
+    .delete()
+    .in('id', responseIds);
+
+  if (error) {
+    throw error;
+  }
+}
 
 export default {
   fetchEvents,
   fetchEventById,
   createEventWithQuestions,
+  updateEventWithQuestions,
   deleteEvent,
+  submitEventResponse,
+  fetchEventResponses,
+  deleteEventResponses,
 };

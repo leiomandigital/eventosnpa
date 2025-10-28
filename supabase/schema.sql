@@ -5,19 +5,20 @@ create extension if not exists "pgcrypto";
 -- Tabela de usuarios do sistema
 create table if not exists users (
   id uuid primary key default gen_random_uuid(),
+  login text not null unique,
   name text not null,
-  email text not null unique,
   phone text not null,
   role text not null check (role in ('admin', 'organizer', 'participant')),
   status text not null check (status in ('ativo', 'inativo')) default 'ativo',
   password_hash text not null,
+  password_change_required boolean not null default false,
   created_at timestamptz not null default timezone('utc', now())
 );
 
 -- Usuario administrador padrao (senha: 123456 -> SHA-256)
-insert into users (name, email, phone, role, status, password_hash)
-values ('Administrador', 'admin@eventosnpa.com', '+5527999999999', 'admin', 'ativo', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92')
-on conflict (email) do nothing;
+insert into users (login, name, phone, role, status, password_hash, password_change_required)
+values ('admin', 'Administrador', '+5527999999999', 'admin', 'ativo', '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', false)
+on conflict (login) do nothing;
 
 -- Tabela de eventos
 create table if not exists events (
