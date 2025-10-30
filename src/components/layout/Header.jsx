@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, LogOut } from 'lucide-react';
+import { Calendar, LogOut, Menu } from 'lucide-react';
 
 const roleLabels = {
   admin: 'Administrador',
@@ -7,10 +7,16 @@ const roleLabels = {
   participant: 'Participante',
 };
 
-const Header = ({ userRole, onLogout, userName, userLogin }) => (
+const Header = ({ userRole, onLogout, userName, userLogin, onToggleSidebar }) => (
   <header className="bg-white border-b border-gray-200 px-6 py-4">
     <div className="flex items-center justify-between">
       <div className="flex items-center space-x-3">
+        <button 
+          onClick={onToggleSidebar}
+          className="p-2 text-gray-600 hover:text-sky-600 md:hidden" // Apenas visível em telas menores
+        >
+          <Menu className="w-6 h-6" />
+        </button>
         <div className="w-10 h-10 bg-sky-500 rounded-lg flex items-center justify-center">
           <Calendar className="w-6 h-6 text-white" />
         </div>

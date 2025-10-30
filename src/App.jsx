@@ -15,6 +15,8 @@ import {
   deleteEvent,
   fetchEventResponses,
   deleteEventResponses,
+  submitEventResponse,
+  fetchEventById,
 } from './services/eventsService';
 import {
   loginUser,
@@ -25,12 +27,14 @@ import {
 
 const VIEWS_REQUIRING_EVENTS = new Set(['dashboard', 'events', 'preview-event', 'event-responses']);
 const VIEWS_KEEPING_SELECTED_EVENT = new Set(['respond-event', 'preview-event', 'event-responses']);
+const USER_STORAGE_KEY = 'event-management-user';
 
 const EventManagementSystem = () => {
   const [currentView, setCurrentView] = useState('login');
   const [currentUser, setCurrentUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
 
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(false);
@@ -42,9 +46,37 @@ const EventManagementSystem = () => {
   const [users, setUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
 
+  const [responseSubmitting, setResponseSubmitting] = useState(false);
+  const [responseSubmitted, setResponseSubmitted] = useState(false);
+  
+  const [publicView, setPublicView] = useState({ event: null, mode: null });
+  const [publicViewLoading, setPublicViewLoading] = useState(true);
+
   const userRole = currentUser?.role ?? 'participant';
 
+  const toggleSidebar = () => {
+    setSidebarOpen(!isSidebarOpen);
+  };
+  
+  useEffect(() => {
+    const persistedUser = window.localStorage.getItem(USER_STORAGE_KEY);
+    if (persistedUser) {
+      try {
+        const user = JSON.parse(persistedUser);
+        setCurrentUser(user);
+        setCurrentView('dashboard');
+      } catch (error) {
+        window.localStorage.removeItem(USER_STORAGE_KEY);
+      }
+    }
+    setAuthLoading(false);
+  }, []);
+
   const handleChangeView = (view) => {
+    if (window.location.pathname.startsWith('/visualizar/evento/') || window.location.pathname.startsWith('/responder/evento/')) {
+      window.history.pushState({}, '', '/');
+    }
+    
     if (!VIEWS_KEEPING_SELECTED_EVENT.has(view)) {
       setSelectedEvent(null);
       setEventResponses([]);
@@ -52,8 +84,37 @@ const EventManagementSystem = () => {
     if (view !== 'create-event') {
       setEditingEvent(null);
     }
+    setResponseSubmitted(false);
     setCurrentView(view);
+    setSidebarOpen(false);
   };
+  
+  const handlePublicUrl = useCallback(async () => {
+    setPublicViewLoading(true);
+    const path = window.location.pathname;
+    const previewMatch = path.match(/\/visualizar\/evento\/(.*?)$/);
+    const responseMatch = path.match(/\/responder\/evento\/(.*?)$/);
+
+    const match = previewMatch || responseMatch;
+    if (match) {
+      const eventId = match[1];
+      const mode = previewMatch ? 'preview' : 'response';
+      if (eventId) {
+        try {
+          const event = await fetchEventById(eventId);
+          setPublicView({ event, mode });
+        } catch (error) {
+          window.alert(error?.message ?? 'Nao foi possivel carregar o evento.');
+        }
+      }
+    }
+    setPublicViewLoading(false);
+  }, []);
+  
+  useEffect(() => {
+    handlePublicUrl();
+  }, [handlePublicUrl]);
+
 
   const loadEvents = useCallback(async () => {
     setEventsLoading(true);
@@ -103,6 +164,7 @@ const EventManagementSystem = () => {
     try {
       const user = await loginUser({ login, password });
       setCurrentUser(user);
+      window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
       setCurrentView('dashboard');
       await loadEvents();
     } catch (error) {
@@ -114,6 +176,7 @@ const EventManagementSystem = () => {
   };
 
   const handleLogout = () => {
+    window.localStorage.removeItem(USER_STORAGE_KEY);
     setSelectedEvent(null);
     setEvents([]);
     setUsers([]);
@@ -220,9 +283,23 @@ const EventManagementSystem = () => {
       setEventResponsesLoading(false);
     }
   };
+  
+  const handleSharePreviewLink = (eventToShare) => {
+    const shareLink = `${window.location.origin}/visualizar/evento/${eventToShare.id}`;
 
-  const handleShareEvent = (eventToShare) => {
-    const shareLink = `${window.location.origin}/eventos/${eventToShare.id}`;
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(shareLink).then(() => {
+        window.alert('Link de compartilhamento copiado para a area de transferencia.');
+      }).catch(() => {
+        window.alert(`Copie o link para compartilhar: ${shareLink}`);
+      });
+    } else {
+      window.prompt('Copie o link para compartilhar:', shareLink);
+    }
+  };
+
+  const handleShareResponseLink = (eventToShare) => {
+    const shareLink = `${window.location.origin}/responder/evento/${eventToShare.id}`;
 
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(shareLink).then(() => {
@@ -243,6 +320,49 @@ const EventManagementSystem = () => {
     }
     setSelectedEvent(event);
     setCurrentView('respond-event');
+  };
+  
+  const handleSubmitPublicResponse = async (answers) => {
+    if (!publicView.event) {
+      window.alert('Evento nao encontrado.');
+      return;
+    }
+
+    setResponseSubmitting(true);
+    try {
+      await submitEventResponse(publicView.event.id, answers, undefined);
+      setResponseSubmitted(true);
+    } catch (error) {
+      const message = error?.message ?? 'Nao foi possivel enviar sua resposta.';
+      window.alert(message);
+    } finally {
+      setResponseSubmitting(false);
+    }
+  };
+
+  const handleSubmitResponse = async (answers) => {
+    if (!selectedEvent) {
+      window.alert('Evento nao encontrado.');
+      return;
+    }
+
+    setResponseSubmitting(true);
+    try {
+      await submitEventResponse(selectedEvent.id, answers, currentUser?.id);
+      setResponseSubmitted(true);
+      await loadEvents();
+
+      if (currentUser) {
+        setTimeout(() => {
+          handleChangeView('events');
+        }, 5000);
+      }
+    } catch (error) {
+      const message = error?.message ?? 'Nao foi possivel enviar sua resposta.';
+      window.alert(message);
+    } finally {
+      setResponseSubmitting(false);
+    }
   };
 
   const handleEditEvent = (eventToEdit) => {
@@ -280,10 +400,40 @@ const EventManagementSystem = () => {
     }
     return events;
   }, [events, userRole]);
-
-  if (currentView === 'login') {
+  
+  if (publicViewLoading || (authLoading && !currentUser)) {
     return (
-      <LoginView 
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-lg">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (publicView.event) {
+    if (publicView.mode === 'preview') {
+      return (
+        <RespondEventView
+          event={publicView.event}
+          readOnly
+        />
+      );
+    }
+    if (publicView.mode === 'response') {
+      return (
+        <RespondEventView
+          event={publicView.event}
+          publicResponse
+          onSubmit={handleSubmitPublicResponse}
+          submitting={responseSubmitting}
+          submitted={responseSubmitted}
+        />
+      );
+    }
+  }
+
+  if (!currentUser) {
+    return (
+      <LoginView
         onLogin={handleLogin}
         loading={authLoading}
         errorMessage={authError}
@@ -293,29 +443,33 @@ const EventManagementSystem = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header 
+      <Header
         userRole={userRole}
         onLogout={handleLogout}
         userName={currentUser?.name}
         userEmail={currentUser?.email}
+        onToggleSidebar={toggleSidebar}
       />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
+        <Sidebar
           currentView={currentView}
           userRole={userRole}
           onChangeView={handleChangeView}
+          isOpen={isSidebarOpen}
+          onClose={toggleSidebar}
         />
         <main className="flex-1 overflow-y-auto">
           {currentView === 'dashboard' && (
-            <DashboardView 
+            <DashboardView
               userRole={userRole}
               events={events}
               onNavigate={handleChangeView}
+              onRespond={(event) => handleRespondEvent(event.id)}
             />
           )}
 
           {currentView === 'events' && (
-            <EventsListView 
+            <EventsListView
               userRole={userRole}
               events={visibleEvents}
               loading={eventsLoading}
@@ -323,22 +477,22 @@ const EventManagementSystem = () => {
               onRespond={(event) => handleRespondEvent(event.id)}
               onPreview={handlePreviewEvent}
               onViewResponses={handleViewEventResponses}
-              onShare={handleShareEvent}
+              onShare={handleShareResponseLink}
               onEdit={handleEditEvent}
               onDelete={(eventId) => handleDeleteEvent(eventId)}
             />
           )}
 
           {currentView === 'preview-event' && selectedEvent && (
-            <RespondEventView 
+            <RespondEventView
               event={selectedEvent}
               readOnly
-              onShare={handleShareEvent}
+              onShare={handleSharePreviewLink}
             />
           )}
 
           {currentView === 'create-event' && (
-            <CreateEventView 
+            <CreateEventView
               editingEvent={editingEvent}
               availableEvents={events}
               onCancel={() => handleChangeView('events')}
@@ -347,14 +501,17 @@ const EventManagementSystem = () => {
           )}
 
           {currentView === 'respond-event' && selectedEvent && (
-            <RespondEventView 
+            <RespondEventView
               event={selectedEvent}
               onBack={() => handleChangeView('events')}
+              onSubmit={handleSubmitResponse}
+              submitting={responseSubmitting}
+              submitted={responseSubmitted}
             />
           )}
 
           {currentView === 'event-responses' && selectedEvent && (
-            <EventResponsesView 
+            <EventResponsesView
               event={selectedEvent}
               responses={eventResponses}
               loading={eventResponsesLoading}
@@ -363,7 +520,7 @@ const EventManagementSystem = () => {
           )}
 
           {currentView === 'users' && userRole === 'admin' && (
-            <UsersView 
+            <UsersView
               users={users}
               loading={usersLoading}
               onCreateUser={handleCreateUser}
@@ -377,6 +534,3 @@ const EventManagementSystem = () => {
 };
 
 export default EventManagementSystem;
-
-
-

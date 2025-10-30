@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Edit2, Plus, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { Edit2, Plus, Trash2, MoreVertical } from 'lucide-react';
 
 const roleLabels = {
   admin: 'Administrador',
@@ -89,6 +89,53 @@ const decomposePhone = (phone) => {
   };
 };
 
+// Dropdown de Ações para Usuários
+const UserActionsDropdown = ({ user, onEditUser, onDeleteUser }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
+  const handleAction = (action, value) => {
+    action(value);
+    setIsOpen(false);
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button onClick={() => setIsOpen(!isOpen)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-full">
+        <MoreVertical className="w-5 h-5" />
+      </button>
+      {isOpen && (
+        <div className="absolute right-0 mt-2 w-48 bg-white border rounded-md shadow-lg z-20">
+          <button 
+            onClick={() => handleAction(onEditUser, user)} 
+            className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center"
+          >
+            <Edit2 className="w-4 h-4 mr-2" /> Editar
+          </button>
+          <button 
+            onClick={() => handleAction(onDeleteUser, user.id)} 
+            className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center"
+          >
+            <Trash2 className="w-4 h-4 mr-2" /> Deletar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
 const UsersView = ({
   users = [],
   loading = false,
@@ -172,6 +219,7 @@ const UsersView = ({
     });
     setEditingUserId(user.id);
     setErrors({});
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleSubmit = async (event) => {
@@ -243,7 +291,7 @@ const UsersView = ({
         onSubmit={handleSubmit}
         className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 space-y-6"
       >
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Login</label>
             <input
@@ -380,6 +428,7 @@ const UsersView = ({
           </div>
         </div>
 
+
         <div className="flex justify-end space-x-2">
           {editingUserId && (
             <button
@@ -403,80 +452,71 @@ const UsersView = ({
       </form>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Login</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Papel</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Troca de senha</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Acoes</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {loading && (
-              <tr>
-                <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">
-                  Carregando usuarios...
-                </td>
-              </tr>
-            )}
+        <div className="overflow-x-auto">
+            <table className="w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                    <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Login</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Telefone</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Papel</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Troca de senha</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acoes</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                    {loading && (
+                    <tr>
+                        <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">Carregando usuarios...</td>
+                    </tr>
+                    )}
 
-            {!loading && !hasUsers && (
-              <tr>
-                <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">
-                  Nenhum usuario cadastrado ate o momento.
-                </td>
-              </tr>
-            )}
+                    {!loading && !hasUsers && (
+                    <tr>
+                        <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">Nenhum usuario cadastrado.</td>
+                    </tr>
+                    )}
 
-            {!loading && users.map(user => {
-              const statusInfo = statusLabels[user.status] ?? statusLabels.ativo;
-              return (
-                <tr key={user.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 font-medium text-gray-900">{user.name}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{user.login}</td>
-                  <td className="px-6 py-4 text-sm text-gray-600">{user.phone}</td>
-                  <td className="px-6 py-4">
-                    <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
-                      {roleLabels[user.role] ?? user.role}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusInfo.className}`}>
-                      {statusInfo.label}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-gray-600">
-                    {user.password_change_required ? 'Sim' : 'Nao'}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleEditUser(user)}
-                        className="p-2 text-gray-600 hover:bg-gray-50 rounded-lg transition"
-                        title="Editar usuario"
-                        type="button"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(user.id)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
-                        title="Excluir usuario"
-                        type="button"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                    {!loading && users.map(user => {
+                    const statusInfo = statusLabels[user.status] ?? statusLabels.ativo;
+                    return (
+                        <tr key={user.id} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 font-medium text-gray-900 break-words">{user.name}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600 break-words">{user.login}</td>
+                            <td className="px-6 py-4 text-sm text-gray-600 hidden md:table-cell">{user.phone}</td>
+                            <td className="px-6 py-4 hidden md:table-cell">
+                                <span className="px-3 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
+                                {roleLabels[user.role] ?? user.role}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 hidden md:table-cell">
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusInfo.className}`}>
+                                {statusInfo.label}
+                                </span>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-gray-600 hidden md:table-cell">
+                                {user.password_change_required ? 'Sim' : 'Nao'}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                                <div className="hidden md:flex items-center justify-end space-x-1">
+                                    <button onClick={() => handleEditUser(user)} className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                                    <button onClick={() => handleDelete(user.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg" title="Deletar"><Trash2 className="w-4 h-4" /></button>
+                                </div>
+                                <div className="md:hidden">
+                                    <UserActionsDropdown 
+                                        user={user} 
+                                        onEditUser={handleEditUser} 
+                                        onDeleteUser={handleDelete} 
+                                    />
+                                </div>
+                            </td>
+                        </tr>
+                    );
+                    })}
+                </tbody>
+            </table>
+        </div>
       </div>
     </div>
   );

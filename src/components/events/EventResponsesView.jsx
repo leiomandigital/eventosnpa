@@ -47,6 +47,14 @@ const EventResponsesView = ({
     ));
   };
 
+  const handleSelectAll = () => {
+    if (selectedIds.length === responses.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(responses.map(r => r.id));
+    }
+  };
+
   const handleDeleteSelected = () => {
     if (!selectedIds.length || typeof onDeleteResponses !== 'function') {
       return;
@@ -57,10 +65,15 @@ const EventResponsesView = ({
     }
     onDeleteResponses(selectedIds);
   };
+  
+  const totalResponses = responses?.length ?? 0;
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">
+          {totalResponses} {totalResponses === 1 ? 'resposta' : 'respostas'} no total
+        </p>
         <button
           onClick={handleDeleteSelected}
           className="inline-flex items-center space-x-2 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition disabled:opacity-60 disabled:cursor-not-allowed"
@@ -73,8 +86,7 @@ const EventResponsesView = ({
       </div>
 
       <header className="space-y-1">
-        <h2 className="text-2xl font-bold text-sky-600">Respostas do evento</h2>
-        {event?.title && <p className="text-sm text-gray-600">{event.title}</p>}
+        <h2 className="text-2xl font-bold text-sky-600">Respostas do {event?.title}</h2>
       </header>
 
       {loading ? (
@@ -86,7 +98,15 @@ const EventResponsesView = ({
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Selecionar</th>                
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  <input
+                    type="checkbox"
+                    className="text-sky-600 focus:ring-sky-500"
+                    checked={selectedIds.length === responses.length && responses.length > 0}
+                    onChange={handleSelectAll}
+                    disabled={loading}
+                  />
+                </th>                
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Enviado em</th>
                 {orderedQuestions.map(question => (
                   <th

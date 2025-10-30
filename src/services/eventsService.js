@@ -1,5 +1,5 @@
 import supabase from '../lib/supabaseClient';
-import { sanitizeInput, sanitizeStringArray } from '../utils/sanitize';
+import { sanitizeInput, sanitizeStringArray, sanitizePreserveFormatting } from '../utils/sanitize';
 
 const EVENT_STATUS = ['aguardando', 'ativo', 'encerrado'];
 const QUESTION_TYPES = ['short_text', 'long_text', 'time', 'multiple_choice', 'single_choice'];
@@ -98,7 +98,7 @@ export async function fetchEventById(eventId) {
 
 const buildEventPayload = (eventData, currentUserId) => ({
   title: sanitizeInput(eventData.title),
-  additional_info: sanitizeInput(eventData.additionalInfo) || null,
+  additional_info: sanitizePreserveFormatting(eventData.additionalInfo) || null,
   event_date: eventData.eventDate,
   start_datetime: eventData.startDateTime,
   end_datetime: eventData.endDateTime,
@@ -165,7 +165,7 @@ export async function updateEventWithQuestions(eventId, eventData, questions) {
 
   const payload = {
     title: sanitizeInput(eventData.title),
-    additional_info: sanitizeInput(eventData.additionalInfo) || null,
+    additional_info: sanitizePreserveFormatting(eventData.additionalInfo) || null,
     event_date: eventData.eventDate,
     start_datetime: eventData.startDateTime,
     end_datetime: eventData.endDateTime,
@@ -210,8 +210,11 @@ export async function updateEventWithQuestions(eventId, eventData, questions) {
 export async function submitEventResponse(eventId, answers = {}, userId = null) {
   const responsePayload = {
     event_id: eventId,
-    submitted_by: userId ?? null,
   };
+
+  if (userId) {
+    responsePayload.submitted_by = userId;
+  }
 
   const { data: createdResponse, error: responseError } = await supabase
     .from('event_responses')
