@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import LoginView from './components/auth/LoginView';
+import ForcePasswordChangeView from './components/auth/ForcePasswordChangeView';
 import Header from './components/layout/Header';
 import Sidebar from './components/layout/Sidebar';
 import DashboardView from './components/dashboard/DashboardView';
@@ -24,6 +25,7 @@ import {
   createUser,
   updateUser, 
   deleteUser,
+  updateUserPassword,
 } from './services/usersService';
 
 const VIEWS_REQUIRING_EVENTS = new Set(['dashboard', 'events', 'preview-event', 'event-responses']);
@@ -36,6 +38,10 @@ const EventManagementSystem = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState('');
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+
+  // Estado para controlar a troca forçada de senha
+  const [passwordChangeLoading, setPasswordChangeLoading] = useState(false);
+  const [passwordChangeError, setPasswordChangeError] = useState('');
 
   const [events, setEvents] = useState([]);
   const [eventsLoading, setEventsLoading] = useState(false);
@@ -65,7 +71,13 @@ const EventManagementSystem = () => {
       try {
         const user = JSON.parse(persistedUser);
         setCurrentUser(user);
-        setCurrentView('dashboard');
+        
+        // Verifica se precisa trocar a senha
+        if (user.password_change_required) {
+          setCurrentView('force-password-change');
+        } else {
+          setCurrentView('dashboard');
+        }
       } catch (error) {
         window.localStorage.removeItem(USER_STORAGE_KEY);
       }
@@ -148,6 +160,11 @@ const EventManagementSystem = () => {
       return;
     }
 
+    // Não carrega eventos se estiver na tela de troca de senha
+    if (currentView === 'force-password-change') {
+      return;
+    }
+
     if (VIEWS_REQUIRING_EVENTS.has(currentView) && events.length === 0) {
       loadEvents();
     }
@@ -166,13 +183,49 @@ const EventManagementSystem = () => {
       const user = await loginUser({ login, password });
       setCurrentUser(user);
       window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
-      setCurrentView('dashboard');
-      await loadEvents();
+      
+      // Verifica se o usuário precisa trocar a senha
+      if (user.password_change_required) {
+        setCurrentView('force-password-change');
+      } else {
+        setCurrentView('dashboard');
+        await loadEvents();
+      }
     } catch (error) {
       const message = error?.message ?? 'Nao foi possivel autenticar.';
       setAuthError(message);
     } finally {
       setAuthLoading(false);
+    }
+  };
+
+  const handleForcePasswordChange = async (newPassword) => {
+    if (!currentUser) {
+      return;
+    }
+
+    setPasswordChangeLoading(true);
+    setPasswordChangeError('');
+
+    try {
+      await updateUserPassword(currentUser.id, newPassword);
+      
+      // Atualiza o usuário local
+      const updatedUser = {
+        ...currentUser,
+        password_change_required: false,
+      };
+      setCurrentUser(updatedUser);
+      window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
+      
+      window.alert('Senha alterada com sucesso!');
+      setCurrentView('dashboard');
+      await loadEvents();
+    } catch (error) {
+      const message = error?.message ?? 'Nao foi possivel alterar a senha.';
+      setPasswordChangeError(message);
+    } finally {
+      setPasswordChangeLoading(false);
     }
   };
 
@@ -450,6 +503,19 @@ const EventManagementSystem = () => {
         onLogin={handleLogin}
         loading={authLoading}
         errorMessage={authError}
+      />
+    );
+  }
+
+  // Tela de troca forçada de senha
+  if (currentUser.password_change_required) {
+    return (
+      <ForcePasswordChangeView
+        userName={currentUser.name}
+        userLogin={currentUser.login}
+        loading={passwordChangeLoading}
+        errorMessage={passwordChangeError}
+        onSubmit={handleForcePasswordChange}
       />
     );
   }
