@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { Edit2, Plus, Trash2, MoreVertical } from 'lucide-react';
+import { useUsers } from '../../contexts/UsersContext';
 
 const roleLabels = {
   admin: 'Administrador',
@@ -140,19 +141,19 @@ const UserActionsDropdown = ({ user, onEditUser, onDeleteUser }) => {
   );
 };
 
-const UsersView = ({
-  users = [],
-  loading = false,
-  onCreateUser,
-  onUpdateUser,
-  onDeleteUser,
-}) => {
+const UsersView = () => {
+  const { users, loading, loadUsers, createUser, updateUser, deleteUser } = useUsers();
+
   const [formData, setFormData] = useState(DEFAULT_FORM_STATE);
   const [originalUserData, setOriginalUserData] = useState(null);
   const [countryName, setCountryName] = useState(COUNTRY_MAP[DEFAULT_FORM_STATE.countryCode] || 'País não identificado');
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
+
+  useEffect(() => {
+    loadUsers();
+  }, [loadUsers]);
 
   const hasUsers = useMemo(() => users.length > 0, [users.length]);
 
@@ -264,7 +265,7 @@ const UsersView = ({
         }
 
         if (Object.keys(finalPayload).length > 0) {
-          await onUpdateUser?.(editingUserId, finalPayload);
+          await updateUser(editingUserId, finalPayload);
         }
       } else {
         const payload = {
@@ -276,7 +277,7 @@ const UsersView = ({
           passwordChangeRequired: formData.passwordChangeRequired,
           password: formData.password,
         };
-        await onCreateUser?.(payload);
+        await createUser(payload);
       }
       resetForm();
     } catch (error) {
@@ -289,7 +290,7 @@ const UsersView = ({
 
   const handleDelete = async (userId) => {
     try {
-      await onDeleteUser?.(userId);
+      await deleteUser(userId);
       if (editingUserId === userId) {
         resetForm();
       }
