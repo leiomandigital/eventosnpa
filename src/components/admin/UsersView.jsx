@@ -61,20 +61,24 @@ const decomposePhone = (phone) => {
 
   const digits = sanitizeDigits(phone);
 
-  if (digits.length < 5) {
+  // Handle Brazilian numbers specifically
+  if (digits.startsWith('55') && digits.length > 4) {
+    const country = '55';
+    const area = digits.slice(2, 4);
+    const number = digits.slice(4);
     return {
-      countryCode: DEFAULT_FORM_STATE.countryCode,
-      ddd: '',
-      phoneNumber: digits,
+      countryCode: `+${country}`,
+      ddd: area,
+      phoneNumber: number,
     };
   }
 
-  const regex = /^(\d{1,3})(\d{2,3})(\d{4,5})(\d{0,4})?$/;
+  // Generic fallback for other formats
+  const regex = /^(\d{1,3})(\d{2,3})(\d{4,9})$/;
   const match = digits.match(regex);
 
   if (match) {
-    const [, country, area, main, suffix] = match;
-    const number = suffix ? `${main}${suffix}` : main;
+    const [, country, area, number] = match;
     return {
       countryCode: `+${country}`,
       ddd: area,
@@ -84,8 +88,8 @@ const decomposePhone = (phone) => {
 
   return {
     countryCode: DEFAULT_FORM_STATE.countryCode,
-    ddd: digits.slice(0, 3),
-    phoneNumber: digits.slice(-9),
+    ddd: '',
+    phoneNumber: digits,
   };
 };
 
@@ -144,7 +148,8 @@ const UsersView = ({
   onDeleteUser,
 }) => {
   const [formData, setFormData] = useState(DEFAULT_FORM_STATE);
-  const [countryName, setCountryName] = useState(COUNTRY_MAP[DEFAULT_FORM_STATE.countryCode] || 'Pais nao identificado');
+  const [originalUserData, setOriginalUserData] = useState(null);
+  const [countryName, setCountryName] = useState(COUNTRY_MAP[DEFAULT_FORM_STATE.countryCode] || 'País não identificado');
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
   const [editingUserId, setEditingUserId] = useState(null);
@@ -159,7 +164,7 @@ const UsersView = ({
   }, [formData.phoneNumber]);
 
   useEffect(() => {
-    setCountryName(COUNTRY_MAP[formData.countryCode] || 'Pais nao identificado');
+    setCountryName(COUNTRY_MAP[formData.countryCode] || 'País não identificado');
   }, [formData.countryCode]);
 
   const resetForm = () => {
@@ -167,6 +172,7 @@ const UsersView = ({
     setErrors({});
     setSubmitting(false);
     setEditingUserId(null);
+    setOriginalUserData(null);
   };
 
   const handleInputChange = (field) => (event) => {
@@ -195,7 +201,7 @@ const UsersView = ({
 
     if (!formData.login.trim()) newErrors.login = 'Informe o login.';
     if (!formData.name.trim()) newErrors.name = 'Informe o nome completo.';
-    if (!formData.countryCode.trim()) newErrors.countryCode = 'Informe o codigo do pais.';
+    if (!formData.countryCode.trim()) newErrors.countryCode = 'Informe o código do país.';
     if (!formData.ddd.trim()) newErrors.ddd = 'Informe o DDD.';
     if (!formData.phoneNumber.trim()) newErrors.phoneNumber = 'Informe o telefone.';
     if (!isEditing && !formData.password.trim()) newErrors.password = 'Informe uma senha inicial.';
@@ -206,7 +212,7 @@ const UsersView = ({
 
   const handleEditUser = (user) => {
     const phoneParts = decomposePhone(user.phone);
-    setFormData({
+    const userData = {
       login: user.login,
       name: user.name,
       countryCode: phoneParts.countryCode || DEFAULT_FORM_STATE.countryCode,
@@ -216,7 +222,9 @@ const UsersView = ({
       role: user.role,
       status: user.status,
       passwordChangeRequired: Boolean(user.password_change_required),
-    });
+    };
+    setFormData(userData);
+    setOriginalUserData(userData);
     setEditingUserId(user.id);
     setErrors({});
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -232,38 +240,50 @@ const UsersView = ({
 
     const phone = formatPhoneNumber(formData.countryCode, formData.ddd, formData.phoneNumber);
     if (!phone) {
-      setErrors(prev => ({ ...prev, phoneNumber: 'Telefone invalido.' }));
+      setErrors(prev => ({ ...prev, phoneNumber: 'Telefone inválido.' }));
       return;
     }
-
-    const payload = {
-      login: formData.login.trim(),
-      name: formData.name.trim(),
-      phone,
-      role: formData.role,
-      status: formData.status,
-      passwordChangeRequired: formData.passwordChangeRequired,
-    };
 
     setSubmitting(true);
 
     try {
       if (isEditing) {
-        await onUpdateUser?.(editingUserId, {
-          ...payload,
-          password: formData.password.trim() ? formData.password : undefined,
+        const updatedFields = {};
+        Object.keys(formData).forEach(key => {
+          if (formData[key] !== originalUserData[key]) {
+            updatedFields[key] = formData[key];
+          }
         });
+        
+        const finalPayload = { ...updatedFields, phone };
+
+        if (finalPayload.password && finalPayload.password.trim()) {
+          finalPayload.password = finalPayload.password.trim();
+        } else {
+          delete finalPayload.password;
+        }
+
+        if (Object.keys(finalPayload).length > 0) {
+          await onUpdateUser?.(editingUserId, finalPayload);
+        }
       } else {
-        await onCreateUser?.({
-          ...payload,
+        const payload = {
+          login: formData.login.trim(),
+          name: formData.name.trim(),
+          phone,
+          role: formData.role,
+          status: formData.status,
+          passwordChangeRequired: formData.passwordChangeRequired,
           password: formData.password,
-        });
+        };
+        await onCreateUser?.(payload);
       }
       resetForm();
     } catch (error) {
-      const message = error?.message ?? 'Nao foi possivel salvar o usuario.';
+      const message = error?.message ?? 'Não foi possível salvar o usuário.';
       window.alert(message);
-      setSubmitting(false);
+    } finally {
+        setSubmitting(false);
     }
   };
 
@@ -274,7 +294,7 @@ const UsersView = ({
         resetForm();
       }
     } catch (error) {
-      const message = error?.message ?? 'Nao foi possivel excluir o usuario.';
+      const message = error?.message ?? 'Não foi possível excluir o usuário.';
       window.alert(message);
     }
   };
@@ -282,9 +302,9 @@ const UsersView = ({
   return (
     <div className="p-6 space-y-8">
       <header className="space-y-2">
-        <h2 className="text-2xl font-bold text-sky-600">Gerenciar Usuarios</h2>
-        <p className="text-sm text-gray-600">Somente administradores podem acessar esta area.</p>
-        <p className="text-xs text-gray-500">Todos os campos sao obrigatorios.</p>
+        <h2 className="text-2xl font-bold text-sky-600">Gerenciar Usuários</h2>
+        <p className="text-sm text-gray-600">Somente administradores podem acessar esta área.</p>
+        <p className="text-xs text-gray-500">Todos os campos são obrigatórios.</p>
       </header>
 
       <form
@@ -323,7 +343,7 @@ const UsersView = ({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Codigo do pais</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Código do país</label>
             <input
               type="text"
               value={formData.countryCode}
@@ -391,7 +411,7 @@ const UsersView = ({
               disabled={submitting}
             />
             <label htmlFor="password-change-required" className="text-sm text-gray-700">
-              Obrigar usuario a alterar a senha no proximo login
+              Obrigar usuário a alterar a senha no próximo login
             </label>
           </div>
         </div>
@@ -423,7 +443,7 @@ const UsersView = ({
               <option value="inativo">Inativo</option>
             </select>
             <p className="text-xs text-gray-500 mt-1">
-              Usuarios inativos nao conseguem acessar o sistema.
+              Usuários inativos não conseguem acessar o sistema.
             </p>
           </div>
         </div>
@@ -437,7 +457,7 @@ const UsersView = ({
               className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"
               disabled={submitting}
             >
-              Cancelar edicao
+              Cancelar edição
             </button>
           )}
           <button
@@ -446,7 +466,7 @@ const UsersView = ({
             disabled={submitting}
           >
             <Plus className="w-4 h-4" />
-            <span>{submitting ? 'Salvando...' : editingUserId ? 'Atualizar usuario' : 'Adicionar usuario'}</span>
+            <span>{submitting ? 'Salvando...' : editingUserId ? 'Atualizar usuário' : 'Adicionar usuário'}</span>
           </button>
         </div>
       </form>
@@ -462,19 +482,19 @@ const UsersView = ({
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Papel</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Status</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">Troca de senha</th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Acoes</th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                     {loading && (
                     <tr>
-                        <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">Carregando usuarios...</td>
+                        <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">Carregando usuários...</td>
                     </tr>
                     )}
 
                     {!loading && !hasUsers && (
                     <tr>
-                        <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">Nenhum usuario cadastrado.</td>
+                        <td colSpan={7} className="px-6 py-6 text-center text-sm text-gray-500">Nenhum usuário cadastrado.</td>
                     </tr>
                     )}
 
@@ -496,7 +516,7 @@ const UsersView = ({
                                 </span>
                             </td>
                             <td className="px-6 py-4 text-sm text-gray-600 hidden md:table-cell">
-                                {user.password_change_required ? 'Sim' : 'Nao'}
+                                {user.password_change_required ? 'Sim' : 'Não'}
                             </td>
                             <td className="px-6 py-4 text-right">
                                 <div className="hidden md:flex items-center justify-end space-x-1">

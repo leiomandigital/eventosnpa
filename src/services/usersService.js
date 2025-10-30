@@ -1,4 +1,4 @@
-﻿import supabase from '../lib/supabaseClient';
+import supabase from '../lib/supabaseClient';
 import { hashSHA256 } from '../utils/hash';
 import { sanitizeInput } from '../utils/sanitize';
 
@@ -103,6 +103,9 @@ export async function updateUser(userId, updates) {
   if (updates.passwordChangeRequired !== undefined) {
     payload.password_change_required = Boolean(updates.passwordChangeRequired);
   }
+  if (updates.password) {
+    payload.password_hash = await hashSHA256(updates.password);
+  }
 
   if (Object.keys(payload).length === 0) {
     return;
@@ -152,4 +155,3 @@ export default {
   updateUserPassword,
   deleteUser,
 };
-

@@ -22,6 +22,7 @@ import {
   loginUser,
   fetchUsers,
   createUser,
+  updateUser, 
   deleteUser,
 } from './services/usersService';
 
@@ -382,6 +383,18 @@ const EventManagementSystem = () => {
       throw error;
     }
   };
+  
+  const handleUpdateUser = async (userId, userData) => {
+    try {
+      await updateUser(userId, userData);
+      await loadUsers();
+      window.alert('Usuario atualizado com sucesso.');
+    } catch (error) {
+      const message = error?.message ?? 'Nao foi possivel atualizar o usuario.';
+      window.alert(message);
+      throw error;
+    }
+  };
 
   const handleDeleteUser = async (userId) => {
     try {
@@ -524,6 +537,7 @@ const EventManagementSystem = () => {
               users={users}
               loading={usersLoading}
               onCreateUser={handleCreateUser}
+              onUpdateUser={handleUpdateUser}
               onDeleteUser={handleDeleteUser}
             />
           )}
