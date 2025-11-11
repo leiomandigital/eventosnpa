@@ -106,7 +106,7 @@ const EventsListView = ({ userRole, events, loading = false, onCreateEvent, onRe
     </div>
     
     <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-visible">
-      <div className="overflow-x-auto md:overflow-visible">
+      <div className="overflow-visible">
         <table className="table-fixed w-full min-w-max">
           <thead className="bg-gray-50">
             <tr>
