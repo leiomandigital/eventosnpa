@@ -52,7 +52,7 @@ const ActionsDropdown = ({ event, onRespond, onPreview, onViewResponses, onShare
         <MoreVertical className="w-5 h-5" />
       </button>
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-56 bg-white border rounded-md shadow-lg z-30">
+        <div className="absolute right-0 mt-2 w-56 bg-white border rounded-md shadow-lg z-[9999]">
           <button 
             onClick={() => event.status === 'ativo' && handleAction(onRespond, event)} 
             disabled={event.status !== 'ativo'}
@@ -105,9 +105,9 @@ const EventsListView = ({ userRole, events, loading = false, onCreateEvent, onRe
       )}
     </div>
     
-    <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max">
+    <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-visible">
+      <div className="overflow-x-auto md:overflow-visible">
+        <table className="table-fixed w-full min-w-max">
           <thead className="bg-gray-50">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Evento</th>
@@ -118,7 +118,7 @@ const EventsListView = ({ userRole, events, loading = false, onCreateEvent, onRe
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200">
+          <tbody className="divide-y divide-gray-200 overflow-visible">
             {loading && (
               <tr><td colSpan={6} className="px-6 py-6 text-center text-sm text-gray-500">Carregando eventos...</td></tr>
             )}
@@ -134,11 +134,11 @@ const EventsListView = ({ userRole, events, loading = false, onCreateEvent, onRe
               const deleteDisabled = responsesCount > 0;
               const editDisabled = responsesCount > 0;
               return (
-                <tr key={event.id} className="hover:bg-gray-50">
+                <tr key={event.id} className="hover:bg-gray-50 overflow-visible">
                   <td className="px-6 py-4 align-top">
-                    <div className="font-medium text-gray-900 text-sm break-words">{event.title}</div>
+                    <div className="font-medium text-gray-900 text-sm line-clamp-1 break-words overflow-hidden text-ellipsis">{event.title}</div>
                     {event.additionalInfo && (
-                      <p className="text-xs text-gray-500 mt-1 break-words">{event.additionalInfo}</p>
+                      <p className="text-xs text-gray-500 mt-1 line-clamp-2 break-words overflow-hidden text-ellipsis">{event.additionalInfo}</p>
                     )}
                     <div className="text-sm text-gray-500 md:hidden mt-2">
                       {formatDate(event.eventDate)}
@@ -150,7 +150,7 @@ const EventsListView = ({ userRole, events, loading = false, onCreateEvent, onRe
                   <td className="px-6 py-4 align-top whitespace-nowrap">
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${statusInfo.className}`}>{statusInfo.label}</span>
                   </td>
-                  <td className="px-6 py-4 text-right align-top">
+                  <td className="px-6 py-4 text-right align-top overflow-visible relative">
                     <div className="hidden md:flex items-center justify-end space-x-1">
                       <button 
                         onClick={() => onRespond(event)} 
