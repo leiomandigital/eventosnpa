@@ -8,7 +8,7 @@ export function sanitizeInput(value) {
   sanitized = sanitized.normalize('NFKC');
   sanitized = sanitized.replace(/[\u0000-\u001F\u007F]/g, '');
   sanitized = sanitized.replace(/['";`]/g, '');
-  sanitized = sanitized.replace(/(--|\/*|\*\/)/g, '');
+  sanitized = sanitized.replace(/(--|\/\*|\*\/)/g, '');
 
   return sanitized.trim();
 }
@@ -26,7 +26,7 @@ export function sanitizePreserveFormatting(value) {
   sanitized = sanitized.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
   
   // Remove SQL comment-like syntax.
-  sanitized = sanitized.replace(/(--|\/*|\*\/)/g, '');
+  sanitized = sanitized.replace(/(--|\/\*|\*\/)/g, '');
 
   return sanitized;
 }
