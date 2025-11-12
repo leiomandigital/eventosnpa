@@ -49,7 +49,7 @@ const RespondEventView = ({
     if (readOnly || typeof onSubmit !== 'function') {
       return;
     }
-    onSubmit(answers);
+    onSubmit(event, answers);
   };
 
   const renderInput = (question) => {

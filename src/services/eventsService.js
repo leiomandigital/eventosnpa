@@ -208,46 +208,74 @@ export async function updateEventWithQuestions(eventId, eventData, questions) {
 }
 
 export async function submitEventResponse(eventId, answers = {}, userId = null) {
-  const responsePayload = {
-    event_id: eventId,
-  };
-
-  if (userId) {
-    responsePayload.submitted_by = userId;
+  if (!eventId) {
+    throw new Error('ID do evento é obrigatório para submeter uma resposta.');
   }
 
+  // Primeiro, cria um registro "pai" para agrupar todas as respostas
   const { data: createdResponse, error: responseError } = await supabase
     .from('event_responses')
-    .insert(responsePayload)
+    .insert({
+      event_id: eventId,
+      submitted_by: userId || null, // Usa null se o userId não for fornecido
+    })
     .select('id')
     .single();
 
   if (responseError) {
-    throw responseError;
+    console.error('Erro ao criar o registro da resposta:', responseError);
+    throw new Error('Não foi possível registrar a sua submissão.');
   }
 
+  const responseId = createdResponse.id;
+
+  // Se não houver respostas, já terminamos
   const entries = Object.entries(answers ?? {});
   if (entries.length === 0) {
-    return createdResponse.id;
+    return responseId;
   }
 
-  const answersPayload = entries.map(([questionId, value]) => ({
-    response_id: createdResponse.id,
-    question_id: questionId,
-    value: Array.isArray(value) ? value.join(', ') : String(value ?? ''),
-  }));
+  // Prepara as respostas individuais para inserção
+  const answersPayload = entries
+    .map(([questionId, value]) => {
+      // Filtra respostas vazias
+      if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
+        return null;
+      }
 
+      // **AQUI ESTÁ A CORREÇÃO PRINCIPAL**
+      // Formata o valor de forma limpa antes de salvar
+      const formattedValue = Array.isArray(value)
+        ? value.join(', ') // Transforma arrays em texto, ex: "Opção 1, Opção 2"
+        : String(value);   // Garante que todos os outros valores sejam texto simples
+
+      return {
+        response_id: responseId,
+        question_id: questionId,
+        value: formattedValue,
+      };
+    })
+    .filter(Boolean); // Remove os nulos do array
+
+  if (answersPayload.length === 0) {
+    return responseId;
+  }
+
+  // Insere todas as respostas de uma vez
   const { error: answersError } = await supabase
     .from('event_answers')
     .insert(answersPayload);
 
+  // Se a inserção das respostas falhar, desfaz a criação do registro "pai"
   if (answersError) {
-    await supabase.from('event_responses').delete().eq('id', createdResponse.id);
-    throw answersError;
+    console.error('Erro ao inserir as respostas:', answersError);
+    await supabase.from('event_responses').delete().eq('id', responseId);
+    throw new Error('Falha ao salvar as respostas individuais.');
   }
 
-  return createdResponse.id;
+  return responseId;
 }
+
 
 export async function deleteEvent(eventId) {
   const { count, error: countError } = await supabase

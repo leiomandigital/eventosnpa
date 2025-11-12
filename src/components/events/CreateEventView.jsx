@@ -305,7 +305,7 @@ const CreateEventView = ({
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Inicio do evento</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Data inicial para responder o evento</label>
               <input 
                 type="datetime-local" 
                 value={formData.startDateTime}
@@ -316,7 +316,7 @@ const CreateEventView = ({
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Fim do evento</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Data final para responder o evento</label>
               <input 
                 type="datetime-local" 
                 value={formData.endDateTime}

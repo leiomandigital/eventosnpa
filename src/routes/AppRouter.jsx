@@ -401,7 +401,7 @@ const AppRouter = () => {
                       <RespondEventView
                         event={selectedEvent}
                         onBack={() => handleChangeView('events')}
-                        onSubmit={handleSubmitResponse}
+                        onSubmit={(event, answers) => handleSubmitResponse(answers)}
                         submitting={responseSubmitting}
                         submitted={responseSubmitted}
                       />
