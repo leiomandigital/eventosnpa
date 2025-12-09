@@ -52,6 +52,7 @@ const PublicEventRoute = ({ children }) => {
   const { fetchEventForPublicView } = useEvents();
   const [publicView, setPublicView] = useState({ event: null, mode: null });
   const [publicViewLoading, setPublicViewLoading] = useState(true);
+  const [isEventInactive, setIsEventInactive] = useState(false);
 
   const handlePublicUrl = useCallback(async () => {
     setPublicViewLoading(true);
@@ -66,6 +67,13 @@ const PublicEventRoute = ({ children }) => {
       if (eventId) {
         try {
           const event = await fetchEventForPublicView(eventId);
+          
+          if (mode === 'response' && event.status !== 'ativo') {
+            setIsEventInactive(true);
+            setPublicViewLoading(false);
+            return;
+          }
+
           setPublicView({ event, mode });
         } catch (error) {
           // Erro já alertado em fetchEventForPublicView
@@ -83,6 +91,25 @@ const PublicEventRoute = ({ children }) => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <p className="text-lg">Carregando...</p>
+      </div>
+    );
+  }
+
+  if (isEventInactive) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 p-4">
+        <div className="bg-white p-8 rounded-xl shadow-lg max-w-md w-full text-center">
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Formulário Encerrado</h2>
+          <p className="text-gray-600 mb-8">
+            Este formulário não está mais aceitando respostas pois o evento não está ativo.
+          </p>
+          <a 
+            href="/login" 
+            className="inline-block w-full bg-sky-600 text-white py-3 rounded-lg font-medium hover:bg-sky-700 transition"
+          >
+            Ir para Login
+          </a>
+        </div>
       </div>
     );
   }
