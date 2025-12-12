@@ -112,6 +112,7 @@ const CreateEventView = ({
   }, [copySourceId, availableEvents]);
 
   const hasQuestions = useMemo(() => questions.length > 0, [questions.length]);
+  const hasResponses = (editingEvent?.responsesCount ?? 0) > 0; // Verifica se tem respostas
   const disableActiveStatus = useMemo(() => !hasQuestions, [hasQuestions]);
   const selectableEvents = useMemo(() => {
     if (!Array.isArray(availableEvents)) {
@@ -328,7 +329,22 @@ const CreateEventView = ({
           </div>
         </section>
 
+
+
         <section className="border-t border-gray-200 pt-6 space-y-6">
+          {hasResponses && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+              <div className="flex">
+                <div className="ml-3">
+                  <p className="text-sm text-yellow-700">
+                    Este evento ja possui respostas registradas. As perguntas nao podem ser alteradas, adicionadas ou removidas para manter a integridade dos dados. Apenas as configuracoes gerais podem ser editadas.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!hasResponses && (
           <div className="p-4 border border-dashed border-gray-300 rounded-lg space-y-4">
             {selectableEvents.length > 0 && (
               <div>
@@ -429,10 +445,16 @@ const CreateEventView = ({
               </button>
             </div>
           </div>
+          )}
 
           {questions.length > 0 && (
             <div className="space-y-3">
-              {questions.map((question, index) => (
+              {questions.map((question, index) => {
+                const hasResponses = (editingEvent?.responsesCount ?? 0) > 0;
+                const isExistingQuestion = Boolean(question.id);
+                const disableRemove = hasResponses && isExistingQuestion;
+
+                return (
                 <div key={index} className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-start justify-between">
                     <div className="space-y-1">
@@ -452,34 +474,42 @@ const CreateEventView = ({
                       )}
                     </div>
                     <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleMoveQuestion(index, -1)}
-                        className="p-2 text-gray-600 hover:bg-white rounded transition"
-                        title="Mover para cima"
-                        type="button"
-                      >
-                        <ArrowUp className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleMoveQuestion(index, 1)}
-                        className="p-2 text-gray-600 hover:bg-white rounded transition"
-                        title="Mover para baixo"
-                        type="button"
-                      >
-                        <ArrowDown className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleRemoveQuestion(index)}
-                        className="p-2 text-red-600 hover:bg-white rounded transition"
-                        title="Remover pergunta"
-                        type="button"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {!hasResponses && (
+                      <>
+                        <button
+                          onClick={() => handleMoveQuestion(index, -1)}
+                          className="p-2 text-gray-600 hover:bg-white rounded transition"
+                          title="Mover para cima"
+                          type="button"
+                        >
+                          <ArrowUp className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveQuestion(index, 1)}
+                          className="p-2 text-gray-600 hover:bg-white rounded transition"
+                          title="Mover para baixo"
+                          type="button"
+                        >
+                          <ArrowDown className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleRemoveQuestion(index)}
+                          className="p-2 text-red-600 hover:bg-white rounded transition"
+                          title="Remover pergunta"
+                          type="button"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                      )}
+                      {hasResponses && (
+                        <span className="text-xs text-gray-400 italic">Bloqueado</span>
+                      )}
                     </div>
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           )}
         </section>

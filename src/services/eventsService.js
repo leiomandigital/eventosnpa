@@ -181,27 +181,80 @@ export async function updateEventWithQuestions(eventId, eventData, questions) {
     throw updateError;
   }
 
-  const { error: deleteError } = await supabase
+  // Estrategia segura: Upsert existentes, Insert novas, Delete removidas
+  const existingQuestions = questions.filter(q => q.id);
+  const newQuestions = questions.filter(q => !q.id);
+
+  // 1. Upsert (Atualizar) perguntas existentes
+  if (existingQuestions.length > 0) {
+    const upsertPayload = existingQuestions.map((q, index) => ({
+      id: q.id,
+      event_id: eventId,
+      text: sanitizeInput(q.text),
+      type: q.type,
+      required: Boolean(q.required),
+      options: isChoiceType(q.type) ? sanitizeStringArray(q.options ?? []) : [],
+      sort_order: index, // Mantem a ordem correta baseada no array completo
+    }));
+
+    const { error: upsertError } = await supabase
+      .from('event_questions')
+      .upsert(upsertPayload);
+
+    if (upsertError) throw upsertError;
+  }
+
+  // 2. Insert (Criar) novas perguntas
+  // Precisamos ajustar o sort_order das novas tambem
+  if (newQuestions.length > 0) {
+    // Para saber o sort_order correto, precisamos ver onde elas estao no array original
+    // Mas simplificando: o usuario ve a lista misturada.
+    // O ideal eh construir o payload de insert com o sort_order correto.
+    // O array 'questions' tem a ordem final desejada.
+
+    // Vamos re-iterar sobre 'questions' completo para garantir consistencia de ordem se necessario
+    // Mas como ja separamos, vamos atribuir o sort_order das novas baseadas no indice delas no array original?
+    // Sim, vamos refazer o loop de insert usando o indice original.
+
+    const insertPayload = newQuestions.map(q => {
+      const originalIndex = questions.indexOf(q);
+      return {
+        event_id: eventId,
+        text: sanitizeInput(q.text),
+        type: q.type,
+        required: Boolean(q.required),
+        options: isChoiceType(q.type) ? sanitizeStringArray(q.options ?? []) : [],
+        sort_order: originalIndex,
+      };
+    });
+
+    const { error: insertError } = await supabase
+      .from('event_questions')
+      .insert(insertPayload);
+
+    if (insertError) throw insertError;
+  }
+
+  // 3. Delete (Remover) perguntas que nao estao mais na lista
+  // Busca IDs atuais no banco
+  const { data: currentDbQuestions } = await supabase
     .from('event_questions')
-    .delete()
+    .select('id')
     .eq('event_id', eventId);
 
-  if (deleteError) {
-    throw deleteError;
-  }
+  if (currentDbQuestions) {
+    const currentIds = currentDbQuestions.map(q => q.id);
+    const keptIds = existingQuestions.map(q => q.id);
+    const idsToDelete = currentIds.filter(id => !keptIds.includes(id));
 
-  if (questions.length === 0) {
-    return eventId;
-  }
+    if (idsToDelete.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('event_questions')
+        .delete()
+        .in('id', idsToDelete);
 
-  const questionsPayload = buildQuestionPayload(eventId, questions);
-
-  const { error: insertError } = await supabase
-    .from('event_questions')
-    .insert(questionsPayload);
-
-  if (insertError) {
-    throw insertError;
+      if (deleteError) throw deleteError;
+    }
   }
 
   return eventId;

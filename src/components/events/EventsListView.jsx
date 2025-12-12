@@ -132,7 +132,7 @@ const EventsListView = ({ userRole, events, loading = false, onCreateEvent, onRe
               const responsesCount = Number(event.responsesCount ?? 0);
               const canManage = userRole === 'admin' || userRole === 'organizer';
               const deleteDisabled = responsesCount > 0;
-              const editDisabled = responsesCount > 0;
+              const editDisabled = false;
               return (
                 <tr key={event.id} className="hover:bg-gray-50 overflow-visible">
                   <td className="px-6 py-4 align-top">
