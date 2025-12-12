@@ -45,41 +45,36 @@ const RespondEventView = ({
     setAnswers(prev => ({ ...prev, [questionId]: option }));
   };
 
+  const getFieldError = (question, value) => {
+    const isText = question.type === 'short_text' || question.type === 'long_text';
+    if (!isText) return null;
+
+    if (question.required && !value) return 'Este campo é obrigatório.';
+    if (!value) return null;
+
+    const text = String(value).trim();
+    if (text.length < 3) return 'A resposta deve ter no mínimo 3 caracteres.';
+
+    const hasValidContent = /[a-zA-Z0-9\u00C0-\u00FF]/.test(text);
+    if (!hasValidContent) return 'A resposta deve conter letras ou números.';
+
+    // Heuristica para campos de Nome: Exigir letras para bloquear numeros como "111"
+    if (question.text.toLowerCase().includes('nome')) {
+       const hasLetters = /[a-zA-Z\u00C0-\u00FF]/.test(text);
+       if (!hasLetters) return 'Por favor, insira um nome válido (use letras).';
+    }
+
+    return null;
+  };
+
   const validateField = (questionId, value, questionType) => {
-    if (questionType !== 'short_text' && questionType !== 'long_text') return true;
-    
-    // Se não for obrigatória e não tiver valor, remove erro e valida como true (opcional)
-    if (!value && !questions.find(q => q.id === questionId)?.required) {
-       setErrors(prev => ({ ...prev, [questionId]: null }));
-       return true;
-    }
-    
-    // Se for obrigatória e vazia, deixamos para o browser (required) ou validamos no submit
-    // Mas para o onBlur, se o user limpou o campo, podemos mostrar erro
-    const isRequired = questions.find(q => q.id === questionId)?.required;
-    if (isRequired && !value) {
-      setErrors(prev => ({ ...prev, [questionId]: 'Este campo é obrigatório.' }));
-      return false;
-    }
+    const question = questions.find(q => q.id === questionId);
+    if (!question) return true;
 
-    // Se tiver valor, valida regras de qualidade
-    if (value) {
-      const text = String(value).trim();
-      
-      if (text.length < 3) {
-        setErrors(prev => ({ ...prev, [questionId]: 'A resposta deve ter no mínimo 3 caracteres.' }));
-        return false;
-      }
-      
-      const hasValidContent = /[a-zA-Z0-9\u00C0-\u00FF]/.test(text);
-      if (!hasValidContent) {
-        setErrors(prev => ({ ...prev, [questionId]: 'A resposta deve conter letras ou números.' }));
-        return false;
-      }
-    }
+    const error = getFieldError(question, value);
+    setErrors(prev => ({ ...prev, [questionId]: error }));
 
-    setErrors(prev => ({ ...prev, [questionId]: null }));
-    return true;
+    return !error;
   };
 
   const handleSubmit = (eventSubmit) => {
@@ -90,25 +85,12 @@ const RespondEventView = ({
     let isValid = true;
 
     questions.forEach(question => {
-      // Reutiliza a lógica de validação
-      // Precisamos simular a validação manual pois validateField atualiza estado
       const value = answers[question.id];
-      const isText = question.type === 'short_text' || question.type === 'long_text';
+      const error = getFieldError(question, value);
       
-      if (isText) {
-         if (question.required && !value) {
-            newErrors[question.id] = 'Este campo é obrigatório.';
-            isValid = false;
-         } else if (value) {
-            const text = String(value).trim();
-            if (text.length < 3) {
-               newErrors[question.id] = 'A resposta deve ter no mínimo 3 caracteres.';
-               isValid = false;
-            } else if (!/[a-zA-Z0-9\u00C0-\u00FF]/.test(text)) {
-               newErrors[question.id] = 'A resposta deve conter letras ou números.';
-               isValid = false;
-            }
-         }
+      if (error) {
+        newErrors[question.id] = error;
+        isValid = false;
       }
     });
 
