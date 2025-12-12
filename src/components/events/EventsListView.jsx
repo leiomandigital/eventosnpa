@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Eye, Trash2, Edit2, Share2, Plus, MoreVertical, CheckSquare, ClipboardList } from 'lucide-react';
+import { Eye, Trash2, Edit2, Share2, Plus, MoreVertical, CheckSquare, ClipboardList, Star } from 'lucide-react';
 
 const statusLabels = {
   aguardando: { label: 'Aguardando', className: 'bg-gray-100 text-gray-700' },
@@ -136,7 +136,10 @@ const EventsListView = ({ userRole, events, loading = false, onCreateEvent, onRe
               return (
                 <tr key={event.id} className="hover:bg-gray-50 overflow-visible">
                   <td className="px-6 py-4 align-top">
-                    <div className="font-medium text-gray-900 text-sm line-clamp-1 break-words overflow-hidden text-ellipsis">{event.title}</div>
+                    <div className="font-medium text-gray-900 text-sm line-clamp-1 break-words overflow-hidden text-ellipsis flex items-center">
+                      {event.isTemplate && <Star className="w-4 h-4 text-yellow-500 mr-1 fill-yellow-500" />}
+                      {event.title}
+                    </div>
                     {event.additionalInfo && (
                       <p className="text-xs text-gray-500 mt-1 line-clamp-2 break-words overflow-hidden text-ellipsis">{event.additionalInfo}</p>
                     )}

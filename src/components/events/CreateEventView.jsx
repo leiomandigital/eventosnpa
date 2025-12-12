@@ -52,14 +52,15 @@ const createDefaultFormState = () => {
     startDateTime: now.toISOString().slice(0, 16),
     endDateTime: end.toISOString().slice(0, 16),
     status: 'aguardando',
+    isTemplate: false,
   };
 };
 
-const mapQuestionsFromEvent = (questions = []) =>
-  questions
+const mapQuestionsFromEvent = (questions = [], clearIds = false) =>
+  [...questions]
     .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
     .map(question => ({
-      id: question.id,
+      id: clearIds ? undefined : question.id,
       text: question.text,
       type: question.type,
       required: Boolean(question.required),
@@ -78,7 +79,8 @@ const CreateEventView = ({
   const [questionForm, setQuestionForm] = useState(initialQuestionState);
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
-  const [copySourceId, setCopySourceId] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [copyQuestionsId, setCopyQuestionsId] = useState('');
 
   useEffect(() => {
     if (isEditing) {
@@ -89,37 +91,65 @@ const CreateEventView = ({
         startDateTime: toDateTimeLocalValue(editingEvent.startDateTime),
         endDateTime: toDateTimeLocalValue(editingEvent.endDateTime),
         status: editingEvent.status ?? 'aguardando',
+        isTemplate: editingEvent.isTemplate ?? false,
       });
       setQuestions(mapQuestionsFromEvent(editingEvent.questions));
     } else {
       setFormData(createDefaultFormState());
       setQuestions([]);
     }
-    setCopySourceId('');
+    setSelectedTemplateId('');
+    setCopyQuestionsId('');
     setQuestionForm(initialQuestionState);
     setErrors({});
     setSubmitting(false);
   }, [isEditing, editingEvent]);
 
+  // Logica 1: Carregar Modelo Completo (Titulo + Info + Perguntas)
   useEffect(() => {
-    if (!copySourceId) {
-      return;
+    if (!selectedTemplateId) return;
+
+    const template = availableEvents.find(event => String(event.id) === String(selectedTemplateId));
+    if (template) {
+       // Copia info basica
+       setFormData(prev => ({
+         ...prev,
+         title: template.title,
+         additionalInfo: template.additionalInfo,
+         // Mantem datas e status atuais (REQUISITO: Datas de hoje)
+       }));
+
+       // Copia perguntas
+       if (template.questions?.length) {
+         setQuestions(mapQuestionsFromEvent(template.questions, true));
+       }
     }
-    const sourceEvent = availableEvents.find(event => String(event.id) === String(copySourceId));
-    if (sourceEvent?.questions?.length) {
-      setQuestions(mapQuestionsFromEvent(sourceEvent.questions));
+  }, [selectedTemplateId, availableEvents]);
+
+  // Logica 2: Copiar Apenas Perguntas de outro evento
+  useEffect(() => {
+    if (!copyQuestionsId) return;
+
+    const source = availableEvents.find(event => String(event.id) === String(copyQuestionsId));
+    if (source?.questions?.length) {
+      setQuestions(mapQuestionsFromEvent(source.questions, true));
     }
-  }, [copySourceId, availableEvents]);
+  }, [copyQuestionsId, availableEvents]);
 
   const hasQuestions = useMemo(() => questions.length > 0, [questions.length]);
-  const hasResponses = (editingEvent?.responsesCount ?? 0) > 0; // Verifica se tem respostas
+  const hasResponses = (editingEvent?.responsesCount ?? 0) > 0;
   const disableActiveStatus = useMemo(() => !hasQuestions, [hasQuestions]);
-  const selectableEvents = useMemo(() => {
-    if (!Array.isArray(availableEvents)) {
-      return [];
-    }
-    return availableEvents
-      .filter(event => String(event.id) !== String(editingEvent?.id) && (event.questions ?? []).length > 0);
+  
+  // Listas filtradas para os dropdowns
+  const templateEvents = useMemo(() => {
+      if (!Array.isArray(availableEvents)) return [];
+      return availableEvents.filter(e => e.isTemplate);
+  }, [availableEvents]);
+
+  const allEventsForQuestions = useMemo(() => {
+      if (!Array.isArray(availableEvents)) return [];
+      return availableEvents
+        .filter(event => String(event.id) !== String(editingEvent?.id) && (event.questions ?? []).length > 0);
   }, [availableEvents, editingEvent]);
 
   const handleInputChange = (field) => (event) => {
@@ -232,7 +262,10 @@ const CreateEventView = ({
         setFormData(createDefaultFormState());
         setQuestions([]);
         resetQuestionForm();
-        setCopySourceId('');
+        setQuestions([]);
+        resetQuestionForm();
+        setSelectedTemplateId('');
+        setCopyQuestionsId('');
       }
     } finally {
       setSubmitting(false);
@@ -249,6 +282,24 @@ const CreateEventView = ({
       
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 space-y-8">
         <section className="space-y-6">
+          {/* Seletor de Modelo (Topo) */}
+          {!isEditing && templateEvents.length > 0 && (
+            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100 mb-6">
+              <label className="block text-sm font-medium text-yellow-800 mb-2">Carregar de um Modelo (Template)</label>
+              <select
+                 value={selectedTemplateId}
+                 onChange={(e) => setSelectedTemplateId(e.target.value)}
+                 className="w-full px-4 py-2 border border-yellow-200 rounded-lg focus:ring-2 focus:ring-yellow-500 text-yellow-900 bg-white"
+              >
+                <option value="">-- Selecione um modelo para carregar --</option>
+                {templateEvents.map(template => (
+                  <option key={template.id} value={template.id}>⭐ {template.title}</option>
+                ))}
+              </select>
+              <p className="text-xs text-yellow-600 mt-1">Isso preencherá o titulo, a descrição e as perguntas automaticamente.</p>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Titulo do Evento</label>
             <input 
@@ -324,7 +375,22 @@ const CreateEventView = ({
                 onChange={handleInputChange('endDateTime')}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
               />
-              {errors.endDateTime && <p className="text-xs text-red-500 mt-1">{errors.endDateTime}</p>}
+            {errors.endDateTime && <p className="text-xs text-red-500 mt-1">{errors.endDateTime}</p>}
+            </div>
+
+          </div>
+
+          <div className="flex items-center space-x-2 bg-gray-50 p-3 rounded-lg border border-gray-200">
+            <input
+              id="is-template"
+              type="checkbox"
+              checked={formData.isTemplate}
+              onChange={(e) => setFormData(prev => ({ ...prev, isTemplate: e.target.checked }))}
+              className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
+            />
+            <div>
+              <label htmlFor="is-template" className="text-sm font-medium text-gray-900">Salvar como Modelo de Evento</label>
+              <p className="text-xs text-gray-500">Eventos marcados como modelo aparecem com destaque e podem ser usados para criar novos eventos rapidamente.</p>
             </div>
           </div>
         </section>
@@ -346,18 +412,19 @@ const CreateEventView = ({
 
           {!hasResponses && (
           <div className="p-4 border border-dashed border-gray-300 rounded-lg space-y-4">
-            {selectableEvents.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Copiar perguntas de outro evento</label>
+             {/* Seletor de Perguntas (Fundo - Lista Todos) */}
+            {allEventsForQuestions.length > 0 && (
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Copiar apenas perguntas de outro evento</label>
                 <select
-                  value={copySourceId}
-                  onChange={(event) => setCopySourceId(event.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+                  value={copyQuestionsId}
+                  onChange={(event) => setCopyQuestionsId(event.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 text-gray-900"
                 >
-                  <option value="">Selecione um evento</option>
-                  {selectableEvents.map(eventOption => (
+                  <option value="">-- Selecione um evento para copiar perguntas --</option>
+                  {allEventsForQuestions.map(eventOption => (
                     <option key={eventOption.id} value={eventOption.id}>
-                      {eventOption.title}
+                      {eventOption.isTemplate ? '⭐ ' : ''}{eventOption.title}
                     </option>
                   ))}
                 </select>

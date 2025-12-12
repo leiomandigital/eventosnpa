@@ -14,6 +14,7 @@ const normaliseEvent = (record) => ({
   startDateTime: record.start_datetime,
   endDateTime: record.end_datetime,
   status: record.status,
+  isTemplate: record.is_template ?? false,
   createdBy: record.created_by,
   createdAt: record.created_at,
   questions: (record.event_questions ?? [])
@@ -42,6 +43,7 @@ export async function fetchEvents() {
       start_datetime,
       end_datetime,
       status,
+      is_template,
       created_by,
       created_at,
       event_questions (
@@ -54,7 +56,8 @@ export async function fetchEvents() {
       ),
       event_responses ( count )
     `)
-    .order('created_at', { ascending: false });
+    .order('is_template', { ascending: false }) // Modelos primeiro
+    .order('created_at', { ascending: false }); // Depois por data de criação
 
   if (error) {
     throw error;
@@ -74,6 +77,7 @@ export async function fetchEventById(eventId) {
       start_datetime,
       end_datetime,
       status,
+      is_template,
       created_by,
       created_at,
       event_questions (
@@ -103,6 +107,7 @@ const buildEventPayload = (eventData, currentUserId) => ({
   start_datetime: eventData.startDateTime,
   end_datetime: eventData.endDateTime,
   status: eventData.status,
+  is_template: Boolean(eventData.isTemplate),
   created_by: currentUserId ?? null,
 });
 
@@ -170,6 +175,7 @@ export async function updateEventWithQuestions(eventId, eventData, questions) {
     start_datetime: eventData.startDateTime,
     end_datetime: eventData.endDateTime,
     status: eventData.status,
+    is_template: Boolean(eventData.isTemplate),
   };
 
   const { error: updateError } = await supabase
@@ -181,11 +187,37 @@ export async function updateEventWithQuestions(eventId, eventData, questions) {
     throw updateError;
   }
 
-  // Estrategia segura: Upsert existentes, Insert novas, Delete removidas
+  // Estrategia segura:
+  // 1. Identificar e remover perguntas obsoletas PRIMEIRO (antes de inserir novas)
+  // 2. Upsert (Atualizar) perguntas mantidas
+  // 3. Insert (Criar) novas perguntas
+
   const existingQuestions = questions.filter(q => q.id);
   const newQuestions = questions.filter(q => !q.id);
 
-  // 1. Upsert (Atualizar) perguntas existentes
+  // --- PASSO 1: DELETE (Limpeza) ---
+  const { data: currentDbQuestions } = await supabase
+    .from('event_questions')
+    .select('id')
+    .eq('event_id', eventId);
+
+  if (currentDbQuestions) {
+    const currentIds = currentDbQuestions.map(q => q.id);
+    const keptIds = existingQuestions.map(q => q.id);
+    // Removemos tudo que estah no banco MAS NAO estah na lista de "mantidos"
+    const idsToDelete = currentIds.filter(id => !keptIds.includes(id));
+
+    if (idsToDelete.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('event_questions')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (deleteError) throw deleteError;
+    }
+  }
+
+  // --- PASSO 2: UPSERT (Atualizar Existentes) ---
   if (existingQuestions.length > 0) {
     const upsertPayload = existingQuestions.map((q, index) => ({
       id: q.id,
@@ -194,7 +226,7 @@ export async function updateEventWithQuestions(eventId, eventData, questions) {
       type: q.type,
       required: Boolean(q.required),
       options: isChoiceType(q.type) ? sanitizeStringArray(q.options ?? []) : [],
-      sort_order: index, // Mantem a ordem correta baseada no array completo
+      sort_order: index,
     }));
 
     const { error: upsertError } = await supabase
@@ -204,19 +236,10 @@ export async function updateEventWithQuestions(eventId, eventData, questions) {
     if (upsertError) throw upsertError;
   }
 
-  // 2. Insert (Criar) novas perguntas
-  // Precisamos ajustar o sort_order das novas tambem
+  // --- PASSO 3: INSERT (Inserir Novas) ---
   if (newQuestions.length > 0) {
-    // Para saber o sort_order correto, precisamos ver onde elas estao no array original
-    // Mas simplificando: o usuario ve a lista misturada.
-    // O ideal eh construir o payload de insert com o sort_order correto.
-    // O array 'questions' tem a ordem final desejada.
-
-    // Vamos re-iterar sobre 'questions' completo para garantir consistencia de ordem se necessario
-    // Mas como ja separamos, vamos atribuir o sort_order das novas baseadas no indice delas no array original?
-    // Sim, vamos refazer o loop de insert usando o indice original.
-
     const insertPayload = newQuestions.map(q => {
+      // Recalcula indice para garantir ordem correta global
       const originalIndex = questions.indexOf(q);
       return {
         event_id: eventId,
@@ -233,28 +256,6 @@ export async function updateEventWithQuestions(eventId, eventData, questions) {
       .insert(insertPayload);
 
     if (insertError) throw insertError;
-  }
-
-  // 3. Delete (Remover) perguntas que nao estao mais na lista
-  // Busca IDs atuais no banco
-  const { data: currentDbQuestions } = await supabase
-    .from('event_questions')
-    .select('id')
-    .eq('event_id', eventId);
-
-  if (currentDbQuestions) {
-    const currentIds = currentDbQuestions.map(q => q.id);
-    const keptIds = existingQuestions.map(q => q.id);
-    const idsToDelete = currentIds.filter(id => !keptIds.includes(id));
-
-    if (idsToDelete.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('event_questions')
-        .delete()
-        .in('id', idsToDelete);
-
-      if (deleteError) throw deleteError;
-    }
   }
 
   return eventId;

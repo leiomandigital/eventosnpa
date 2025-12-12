@@ -102,7 +102,10 @@ export const EventsProvider = ({ children }) => {
       await deleteEvent(eventId);
       await loadEvents();
     } catch (error) {
-      const message = error?.message ?? 'Não foi possível remover o evento.';
+      let message = error?.message ?? 'Não foi possível remover o evento.';
+      if (message.includes('foreign key constraint') || message.includes('violates foreign key')) {
+         message = 'Não é possível excluir este evento pois existem respostas vinculadas a ele. Se o evento parece vazio, pode haver respostas de versões anteriores arquivadas no banco.';
+      }
       window.alert(message);
       throw error;
     }
