@@ -22,6 +22,7 @@ const RespondEventView = ({
   }, [questions]);
 
   const [answers, setAnswers] = useState(initialAnswers);
+  const [errors, setErrors] = useState({});
 
   useEffect(() => {
     setAnswers(initialAnswers);
@@ -44,8 +45,82 @@ const RespondEventView = ({
     setAnswers(prev => ({ ...prev, [questionId]: option }));
   };
 
+  const validateField = (questionId, value, questionType) => {
+    if (questionType !== 'short_text' && questionType !== 'long_text') return true;
+    
+    // Se não for obrigatória e não tiver valor, remove erro e valida como true (opcional)
+    if (!value && !questions.find(q => q.id === questionId)?.required) {
+       setErrors(prev => ({ ...prev, [questionId]: null }));
+       return true;
+    }
+    
+    // Se for obrigatória e vazia, deixamos para o browser (required) ou validamos no submit
+    // Mas para o onBlur, se o user limpou o campo, podemos mostrar erro
+    const isRequired = questions.find(q => q.id === questionId)?.required;
+    if (isRequired && !value) {
+      setErrors(prev => ({ ...prev, [questionId]: 'Este campo é obrigatório.' }));
+      return false;
+    }
+
+    // Se tiver valor, valida regras de qualidade
+    if (value) {
+      const text = String(value).trim();
+      
+      if (text.length < 3) {
+        setErrors(prev => ({ ...prev, [questionId]: 'A resposta deve ter no mínimo 3 caracteres.' }));
+        return false;
+      }
+      
+      const hasValidContent = /[a-zA-Z0-9\u00C0-\u00FF]/.test(text);
+      if (!hasValidContent) {
+        setErrors(prev => ({ ...prev, [questionId]: 'A resposta deve conter letras ou números.' }));
+        return false;
+      }
+    }
+
+    setErrors(prev => ({ ...prev, [questionId]: null }));
+    return true;
+  };
+
   const handleSubmit = (eventSubmit) => {
     eventSubmit.preventDefault();
+    
+    // Valida todos os campos antes de enviar
+    const newErrors = {};
+    let isValid = true;
+
+    questions.forEach(question => {
+      // Reutiliza a lógica de validação
+      // Precisamos simular a validação manual pois validateField atualiza estado
+      const value = answers[question.id];
+      const isText = question.type === 'short_text' || question.type === 'long_text';
+      
+      if (isText) {
+         if (question.required && !value) {
+            newErrors[question.id] = 'Este campo é obrigatório.';
+            isValid = false;
+         } else if (value) {
+            const text = String(value).trim();
+            if (text.length < 3) {
+               newErrors[question.id] = 'A resposta deve ter no mínimo 3 caracteres.';
+               isValid = false;
+            } else if (!/[a-zA-Z0-9\u00C0-\u00FF]/.test(text)) {
+               newErrors[question.id] = 'A resposta deve conter letras ou números.';
+               isValid = false;
+            }
+         }
+      }
+    });
+
+    if (!isValid) {
+      setErrors(newErrors);
+      // Foca no primeiro erro se possível
+      const firstErrorId = Object.keys(newErrors)[0];
+      const element = document.getElementById(`question-${firstErrorId}`);
+      if (element) element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
     if (readOnly || typeof onSubmit !== 'function') {
       return;
     }
@@ -67,6 +142,7 @@ const RespondEventView = ({
             disabled={isDisabled}
             value={String(answers[questionId] ?? '')}
             onChange={(e) => handleTextChange(questionId, e.target.value)}
+            onBlur={() => validateField(questionId, answers[questionId], question.type)}
             required={question.required}
           />
         );
@@ -125,6 +201,7 @@ const RespondEventView = ({
             disabled={isDisabled}
             value={String(answers[questionId] ?? '')}
             onChange={(e) => handleTextChange(questionId, e.target.value)}
+            onBlur={() => validateField(questionId, answers[questionId], question.type)}
             required={question.required}
           />
         );
@@ -182,7 +259,14 @@ const RespondEventView = ({
                         {index + 1}. {question.text}
                         {question.required && <span className="text-red-500 ml-1">*</span>}
                         </label>
-                        {renderInput(question)}
+                        <div id={`question-${question.id}`}>
+                          {renderInput(question)}
+                          {errors[question.id] && (
+                            <p className="text-red-500 text-sm mt-1 animate-pulse">
+                              {errors[question.id]}
+                            </p>
+                          )}
+                        </div>
                     </div>
                     ))}
                 </div>
