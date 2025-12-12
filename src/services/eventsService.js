@@ -54,7 +54,7 @@ export async function fetchEvents() {
       ),
       event_responses ( count )
     `)
-    .order('start_datetime', { ascending: true });
+    .order('created_at', { ascending: false });
 
   if (error) {
     throw error;
