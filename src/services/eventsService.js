@@ -289,15 +289,52 @@ export async function submitEventResponse(eventId, answers = {}, userId = null) 
     return responseId;
   }
 
+  // 1. Busca as perguntas para VALIDAR as respostas (Segurança)
+  const { data: eventData, error: eventError } = await supabase
+    .from('events')
+    .select(`
+      event_questions (
+        id,
+        type,
+        options,
+        required
+      )
+    `)
+    .eq('id', eventId)
+    .single();
+
+  if (eventError || !eventData) {
+    throw new Error('Erro ao validar evento para salvar respostas.');
+  }
+
+  const questionsMap = new Map(eventData.event_questions.map(q => [String(q.id), q]));
+
   // Prepara as respostas individuais para inserção
   const answersPayload = entries
     .map(([questionId, value]) => {
       // Filtra respostas vazias
       if (value === null || value === '' || (Array.isArray(value) && value.length === 0)) {
-        return null;
+        return null; // Ignora vazias (a menos que seja required, mas validation fica no front por enqto)
       }
 
-      // **AQUI ESTÁ A CORREÇÃO PRINCIPAL**
+      const question = questionsMap.get(String(questionId));
+      if (!question) {
+        return null; // Pergunta nao existe mais? Ignora.
+      }
+
+      // **VALIDACAO DE SEGURANCA**
+      const isChoice = isChoiceType(question.type);
+      if (isChoice) {
+         const validOptions = question.options || [];
+         const valuesToCheck = Array.isArray(value) ? value : [String(value)];
+         
+         const invalidSelection = valuesToCheck.find(v => !validOptions.includes(v));
+
+         if (invalidSelection) {
+           throw new Error(`A resposta "${invalidSelection}" nao eh valida para a pergunta de multipla escolha.`);
+         }
+      }
+
       // Formata o valor de forma limpa antes de salvar
       const formattedValue = Array.isArray(value)
         ? value.join(', ') // Transforma arrays em texto, ex: "Opção 1, Opção 2"
