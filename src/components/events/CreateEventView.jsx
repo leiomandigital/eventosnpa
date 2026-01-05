@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
+import ReactQuill from 'react-quill-new';
+import 'react-quill-new/dist/quill.snow.css';
 
 const questionTypeOptions = [
   { value: 'short_text', label: 'Texto curto' },
@@ -316,11 +318,11 @@ const CreateEventView = ({
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Informacoes adicionais</label>
-            <textarea 
-              rows={4}
+            <ReactQuill 
+              theme="snow"
               value={formData.additionalInfo}
-              onChange={handleInputChange('additionalInfo')}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-sky-500 focus:border-transparent"
+              onChange={(content) => setFormData(prev => ({ ...prev, additionalInfo: content }))}
+              className="bg-white rounded-lg"
               placeholder="Descreva o evento..."
             />
           </div>

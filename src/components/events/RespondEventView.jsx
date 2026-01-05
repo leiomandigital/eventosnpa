@@ -280,26 +280,30 @@ const RespondEventView = ({
     <div className="bg-white shadow-lg rounded-xl max-w-2xl mx-auto my-8 border">
         <div className="p-8">
             <header className="flex items-start justify-between mb-8">
-                <div className="space-y-2">
+                <div className="space-y-2 flex-1 min-w-0">
                     <h2 className="text-3xl font-bold text-sky-600">{event?.title}</h2>
                     {eventDate && (
                         <p className="text-sm text-gray-500">Data do evento: {eventDate}</p>
-                    )}
-                    {event?.additionalInfo && (
-                        <p className="text-gray-600 whitespace-pre-line pt-4">{event.additionalInfo}</p>
                     )}
                 </div>
                 {showShareButton && (
                     <button
                         onClick={() => onShare(event)}
-                        className="flex items-center space-x-2 bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 transition"
+                        className="flex items-center space-x-2 bg-gray-100 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-200 transition shrink-0 ml-4"
                         title="Compartilhar Pré-visualização"
                     >
-                        <Share2 className="w-4 h-4" />
+                        <Share2 className="w-5 h-5" />
                         <span>Compartilhar</span>
                     </button>
                 )}
             </header>
+            {event?.additionalInfo && (
+                <div 
+                  className="text-gray-600 mb-8 w-full max-w-full overflow-hidden break-words [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_h1]:text-2xl [&_h1]:font-bold [&_h2]:text-xl [&_h2]:font-bold [&_p]:mb-2 [&_img]:max-w-full [&_img]:h-auto"
+                  dangerouslySetInnerHTML={{ __html: (event.additionalInfo || '').replace(/&nbsp;/g, ' ').replace(/\u00A0/g, ' ') }}
+                  style={{ wordBreak: 'normal' }}
+                />
+            )}
           
             <form onSubmit={handleSubmit}>
                 <div className="space-y-6">

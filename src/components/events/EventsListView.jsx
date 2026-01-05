@@ -140,9 +140,6 @@ const EventsListView = ({ userRole, events, loading = false, onCreateEvent, onRe
                       {event.isTemplate && <Star className="w-4 h-4 text-yellow-500 mr-1 fill-yellow-500" />}
                       {event.title}
                     </div>
-                    {event.additionalInfo && (
-                      <p className="text-xs text-gray-500 mt-1 line-clamp-2 break-words overflow-hidden text-ellipsis">{event.additionalInfo}</p>
-                    )}
                     <div className="text-sm text-gray-500 md:hidden mt-2">
                       {formatDate(event.eventDate)}
                     </div>
