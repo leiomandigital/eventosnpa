@@ -1,6 +1,69 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Share2 } from 'lucide-react';
 
+const TextListInput = ({ value, onChange, disabled, onBlur }) => {
+  const currentTags = value ? String(value).split(',').map(t => t.trim()).filter(Boolean) : [];
+  const [inputValue, setInputValue] = useState('');
+
+  const addTag = (tag) => {
+     const cleaned = tag.trim().replace(/,/g, '');
+     if(!cleaned) return;
+     const newTags = [...currentTags, cleaned];
+     onChange(newTags.join(', '));
+     setInputValue('');
+  };
+
+  const removeTag = (indexToRemove) => {
+     const newTags = currentTags.filter((_, index) => index !== indexToRemove);
+     onChange(newTags.join(', '));
+  };
+
+  const handleKeyDown = (e) => {
+      if (e.key === 'Enter' || e.key === ',') {
+          e.preventDefault();
+          addTag(inputValue);
+      }
+  };
+  
+  const handleBlur = () => {
+      if (inputValue) {
+          addTag(inputValue);
+      }
+      if (onBlur) onBlur();
+  };
+
+  return (
+    <div className={`w-full px-2 py-2 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-sky-500 focus-within:border-transparent ${disabled ? 'bg-gray-100' : 'bg-white'}`}>
+       <div className="flex flex-wrap gap-2">
+          {currentTags.map((tag, idx) => (
+             <span key={idx} className="flex items-center bg-sky-100 text-sky-800 text-sm px-3 py-1 rounded-full">
+                {tag}
+                {!disabled && (
+                  <button 
+                    type="button" 
+                    onClick={() => removeTag(idx)}
+                    className="ml-2 text-sky-600 hover:text-sky-900 font-bold focus:outline-none"
+                  >
+                    ×
+                  </button>
+                )}
+             </span>
+          ))}
+          <input
+            type="text"
+            className="flex-grow outline-none bg-transparent min-w-[120px] py-1"
+            placeholder={currentTags.length === 0 ? "Digite e tecle Enter ou Vírgula..." : ""}
+            disabled={disabled}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onBlur={handleBlur}
+          />
+       </div>
+    </div>
+  );
+};
+
 const RespondEventView = ({
   event,
   readOnly = false,
@@ -137,6 +200,15 @@ const RespondEventView = ({
             value={String(answers[questionId] ?? '')}
             onChange={(e) => handleTextChange(questionId, e.target.value)}
             required={question.required}
+          />
+        );
+      case 'text_list':
+        return (
+          <TextListInput
+            value={answers[questionId]}
+            onChange={(val) => handleTextChange(questionId, val)}
+            disabled={isDisabled}
+            onBlur={() => validateField(questionId, answers[questionId], question.type)}
           />
         );
       case 'multiple_choice':

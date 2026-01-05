@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 const questionTypeOptions = [
   { value: 'short_text', label: 'Texto curto' },
   { value: 'long_text', label: 'Texto longo' },
+  { value: 'text_list', label: 'Lista de texto' },
   { value: 'time', label: 'Hora' },
   { value: 'multiple_choice', label: 'Multipla escolha' },
   { value: 'single_choice', label: 'Escolha unica' },
@@ -403,7 +404,7 @@ const CreateEventView = ({
               <div className="flex">
                 <div className="ml-3">
                   <p className="text-sm text-yellow-700">
-                    Este evento ja possui respostas registradas. As perguntas nao podem ser alteradas, adicionadas ou removidas para manter a integridade dos dados. Apenas as configuracoes gerais podem ser editadas.
+                    Este evento já possui respostas registradas. As perguntas não podem ser alteradas, adicionadas ou removidas para manter a integridade dos dados. Apenas as configurações gerais podem ser editadas.
                   </p>
                 </div>
               </div>

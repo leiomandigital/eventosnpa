@@ -2,7 +2,7 @@ import supabase from '../lib/supabaseClient';
 import { sanitizeInput, sanitizeStringArray, sanitizePreserveFormatting } from '../utils/sanitize';
 
 const EVENT_STATUS = ['aguardando', 'ativo', 'encerrado'];
-const QUESTION_TYPES = ['short_text', 'long_text', 'time', 'multiple_choice', 'single_choice'];
+const QUESTION_TYPES = ['short_text', 'long_text', 'time', 'multiple_choice', 'single_choice', 'text_list'];
 
 const isChoiceType = (type) => type === 'multiple_choice' || type === 'single_choice';
 
@@ -325,14 +325,14 @@ export async function submitEventResponse(eventId, answers = {}, userId = null) 
       // **VALIDACAO DE SEGURANCA**
       const isChoice = isChoiceType(question.type);
       if (isChoice) {
-         const validOptions = question.options || [];
-         const valuesToCheck = Array.isArray(value) ? value : [String(value)];
-         
-         const invalidSelection = valuesToCheck.find(v => !validOptions.includes(v));
+        const validOptions = question.options || [];
+        const valuesToCheck = Array.isArray(value) ? value : [String(value)];
 
-         if (invalidSelection) {
-           throw new Error(`A resposta "${invalidSelection}" nao eh valida para a pergunta de multipla escolha.`);
-         }
+        const invalidSelection = valuesToCheck.find(v => !validOptions.includes(v));
+
+        if (invalidSelection) {
+          throw new Error(`A resposta "${invalidSelection}" nao eh valida para a pergunta de multipla escolha.`);
+        }
       }
 
       // Formata o valor de forma limpa antes de salvar
