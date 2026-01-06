@@ -110,7 +110,7 @@ const RespondEventView = ({
   };
 
   const getFieldError = (question, value) => {
-    const isText = question.type === 'short_text' || question.type === 'long_text';
+    const isText = question.type === 'short_text' || question.type === 'long_text' || question.type === 'text_list';
     if (!isText) return null;
 
     if (question.required && !value) return 'Este campo é obrigatório.';
