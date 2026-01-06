@@ -51,7 +51,7 @@ const TextListInput = ({ value, onChange, disabled, onBlur }) => {
           ))}
           <input
             type="text"
-            className="flex-grow outline-none bg-transparent min-w-[120px] py-1"
+            className="flex-grow outline-none bg-transparent min-w-[120px] py-1 border-none focus:ring-0"
             placeholder={currentTags.length === 0 ? "Digite e tecle Enter ou Vírgula..." : ""}
             disabled={disabled}
             value={inputValue}
@@ -63,6 +63,7 @@ const TextListInput = ({ value, onChange, disabled, onBlur }) => {
     </div>
   );
 };
+
 
 const RespondEventView = ({
   event,
@@ -277,7 +278,7 @@ const RespondEventView = ({
   }
 
   return (
-    <div className="bg-white shadow-lg rounded-xl max-w-2xl mx-auto my-8 border">
+    <div className="bg-white shadow-lg rounded-xl max-w-2xl mx-auto my-8 border border-gray-100">
         <div className="p-8">
             <header className="flex items-start justify-between mb-8">
                 <div className="space-y-2 flex-1 min-w-0">

@@ -1,5 +1,4 @@
-import React from 'react';
-import { Calendar, FileText, Users, X } from 'lucide-react';
+import { Calendar, FileText, Users, X, BarChart3 } from 'lucide-react';
 
 const Sidebar = ({ currentView, userRole, onChangeView, isOpen, onClose }) => {
   // Classes base para a barra lateral, sempre aplicadas
@@ -50,6 +49,18 @@ const Sidebar = ({ currentView, userRole, onChangeView, isOpen, onClose }) => {
             <FileText className="w-5 h-5" />
             <span className="font-medium">Eventos</span>
           </button>
+          
+          {(userRole === 'admin' || userRole === 'organizer') && (
+            <button
+              onClick={() => onChangeView('reports')}
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition ${
+                currentView === 'reports' ? 'bg-sky-50 text-sky-600' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <BarChart3 className="w-5 h-5" />
+              <span className="font-medium">Relatórios</span>
+            </button>
+          )}
           
           {userRole === 'admin' && (
             <button

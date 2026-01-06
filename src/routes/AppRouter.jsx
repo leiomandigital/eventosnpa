@@ -11,6 +11,7 @@ import EventsListView from '../components/events/EventsListView';
 import CreateEventView from '../components/events/CreateEventView';
 import RespondEventView from '../components/events/RespondEventView';
 import EventResponsesView from '../components/events/EventResponsesView';
+import ReportsView from '../components/reports/ReportsView';
 import UsersView from '../components/admin/UsersView';
 import Header from '../components/layout/Header';
 import Sidebar from '../components/layout/Sidebar';
@@ -19,7 +20,7 @@ import { useEffect } from 'react';
 import { useCallback } from 'react';
 import { useEvents } from '../contexts/EventsContext';
 
-const VIEWS_REQUIRING_EVENTS = new Set(['dashboard', 'events', 'preview-event', 'event-responses']);
+const VIEWS_REQUIRING_EVENTS = new Set(['dashboard', 'events', 'preview-event', 'event-responses', 'reports']);
 const VIEWS_KEEPING_SELECTED_EVENT = new Set(['respond-event', 'preview-event', 'event-responses']);
 
 const PrivateRoute = ({ children, roles }) => {
@@ -440,6 +441,15 @@ const AppRouter = () => {
                         responses={eventResponses}
                         loading={eventResponsesLoading}
                         onDeleteResponses={handleDeleteResponses}
+                      />
+                    )}
+
+                    {currentView === 'reports' && (userRole === 'admin' || userRole === 'organizer') && (
+                      <ReportsView
+                        events={events}
+                        eventResponses={eventResponses}
+                        loadEventResponses={loadEventResponses}
+                        eventResponsesLoading={eventResponsesLoading}
                       />
                     )}
 
